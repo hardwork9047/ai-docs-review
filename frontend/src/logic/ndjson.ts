@@ -5,7 +5,7 @@
  * Blank lines are dropped. Feed `rest` back in as `buffer` with the next chunk.
  */
 export function splitLines(buffer: string, chunk: string): { lines: string[]; rest: string } {
-  void buffer;
-  void chunk;
-  throw new Error("not implemented");
+  const parts = (buffer + chunk).split("\n");
+  const rest = parts.pop() ?? "";
+  return { lines: parts.filter((line) => line.trim() !== ""), rest };
 }

@@ -63,6 +63,10 @@ export type ReviewEvent = MetaEvent | ResultEvent | ErrorEvent;
 
 /** Parse one NDJSON line. Throws on invalid JSON or an unknown `type`. */
 export function parseEvent(line: string): ReviewEvent {
-  void line;
-  throw new Error("not implemented");
+  const data: unknown = JSON.parse(line);
+  const type = typeof data === "object" && data !== null ? (data as { type?: unknown }).type : null;
+  if (type !== "meta" && type !== "result" && type !== "error") {
+    throw new Error(`unknown event: ${line}`);
+  }
+  return data as ReviewEvent;
 }
