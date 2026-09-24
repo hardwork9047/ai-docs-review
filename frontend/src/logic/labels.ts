@@ -14,12 +14,21 @@ export type Tone = "ok" | "warn" | "ng";
 
 /** Connection lamp text. `null` means the health request itself failed. */
 export function healthLabel(health: Health | null): { text: string; tone: Tone } {
-  void health;
-  throw new Error("not implemented");
+  if (!health?.ok) return { text: "Ollama 未接続", tone: "ng" };
+  if (!health.model_ready) {
+    return { text: `${health.model} が未pull(ollama pull ${health.model})`, tone: "warn" };
+  }
+  return { text: `Ollama 接続OK / ${health.model}`, tone: "ok" };
 }
 
 /** Headline verdict (検印). The reviewer's pass and the rule checks are shown separately. */
 export function verdictLabel(verdict: Verdict): { text: string; tone: Tone } {
-  void verdict;
-  throw new Error("not implemented");
+  if (verdict.overall_passed) return { text: "検印:提出OK", tone: "ok" };
+  if (verdict.passed) {
+    return { text: "部長はOK — ルールチェックの指摘を直せば提出可", tone: "warn" };
+  }
+  if (verdict.high_issues > 0) {
+    return { text: `差し戻し — 重要度「高」が${verdict.high_issues}件`, tone: "ng" };
+  }
+  return { text: "差し戻し — 合格点に届いていません", tone: "ng" };
 }
