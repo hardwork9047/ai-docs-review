@@ -1,6 +1,6 @@
 /** Display wording derived from backend data (kept out of ui/ so it is testable). */
 
-import type { Verdict } from "./events";
+import type { Summary } from "./events";
 
 /** Shape of `GET /api/health` (mirror of backend `OllamaHealth`). */
 export interface Health {
@@ -12,6 +12,9 @@ export interface Health {
 
 export type Tone = "ok" | "warn" | "ng";
 
+/** Colour band of a 0-100 score: >=80 good, >=60 fair, else poor; null = not applicable. */
+export type ScoreTone = "good" | "fair" | "poor" | "na";
+
 /** Connection lamp text. `null` means the health request itself failed. */
 export function healthLabel(health: Health | null): { text: string; tone: Tone } {
   if (!health?.ok) return { text: "Ollama 未接続", tone: "ng" };
@@ -21,17 +24,20 @@ export function healthLabel(health: Health | null): { text: string; tone: Tone }
   return { text: `Ollama 接続OK / ${health.model}`, tone: "ok" };
 }
 
-/**
- * Headline verdict and the word on the 検印 seal.
- * The reviewer's pass and the rule checks are distinguished (warn = only rule checks remain).
- */
-export function verdictLabel(verdict: Verdict): { text: string; tone: Tone; seal: string } {
-  if (verdict.overall_passed) return { text: "検印:提出OK", tone: "ok", seal: "承認" };
-  if (verdict.passed) {
-    return { text: "部長はOK — ルールチェックの指摘を直せば提出可", tone: "warn", seal: "条件付" };
-  }
-  if (verdict.high_issues > 0) {
-    return { text: `差し戻し — 重要度「高」が${verdict.high_issues}件`, tone: "ng", seal: "差戻" };
-  }
-  return { text: "差し戻し — 合格点に届いていません", tone: "ng", seal: "差戻" };
+/** Headline verdict for the whole document. */
+export function verdictLabel(summary: Summary): { text: string; tone: Tone } {
+  void summary;
+  throw new Error("not implemented");
+}
+
+/** Colour band for a score. */
+export function scoreTone(score: number | null): ScoreTone {
+  void score;
+  throw new Error("not implemented");
+}
+
+/** "82" or "–" when not applicable. */
+export function formatScore(score: number | null): string {
+  void score;
+  throw new Error("not implemented");
 }

@@ -1,23 +1,30 @@
 /**
  * Review screen state as a pure reducer. ui/ dispatches actions and re-renders from state.
  *
- * phase: idle → reviewing(アップロード後)→ done(result 受信)| error(error 受信・HTTP失敗・途中切断)
+ * phase: idle → reviewing(アップロード後)→ done(done 受信)| error(HTTP失敗・途中切断)
+ * ページ単位の失敗(page_error)は error にせず pageErrors に積む。
  */
 
-import type { MetaEvent, Review, ReviewEvent, Severity, Verdict } from "./events";
+import type { MetaEvent, PageResult, ReviewEvent, Summary } from "./events";
 
 export type Phase = "idle" | "reviewing" | "done" | "error";
+
+export interface PageFailure {
+  no: number;
+  message: string;
+}
 
 export interface ReviewState {
   phase: Phase;
   fileName: string | null;
   meta: MetaEvent | null;
-  review: Review | null;
-  verdict: Verdict | null;
+  /** ページ番号順 */
+  pages: PageResult[];
+  pageErrors: PageFailure[];
+  summary: Summary | null;
   error: string | null;
-  /** 「対応済み」チェック。index は review.issues / meta.lint の並びに対応 */
-  checkedIssues: boolean[];
-  checkedLint: boolean[];
+  /** 「対応済み」チェック。キーは checkKey() で作る */
+  checked: string[];
 }
 
 export type Action =
@@ -25,73 +32,45 @@ export type Action =
   | { kind: "event"; event: ReviewEvent }
   | { kind: "fail"; message: string }
   | { kind: "end" }
-  | { kind: "toggleIssue"; index: number }
-  | { kind: "toggleLint"; index: number };
+  | { kind: "toggle"; key: string };
 
 export const initialState: ReviewState = {
   phase: "idle",
   fileName: null,
   meta: null,
-  review: null,
-  verdict: null,
+  pages: [],
+  pageErrors: [],
+  summary: null,
   error: null,
-  checkedIssues: [],
-  checkedLint: [],
+  checked: [],
 };
+
+/** Checkbox key for a page's fix (`page`, 0-based `index`) or a lint finding (`page` = 0). */
+export function checkKey(kind: "fix" | "lint", page: number, index: number): string {
+  void kind;
+  void page;
+  void index;
+  throw new Error("not implemented");
+}
 
 /**
  * Return the next state. Never mutates `state`.
- * `end` (stream closed) while still reviewing means the result never arrived → error.
+ * `end` (stream closed) while still reviewing means `done` never arrived → error.
  */
 export function reduce(state: ReviewState, action: Action): ReviewState {
-  switch (action.kind) {
-    case "start":
-      return { ...initialState, phase: "reviewing", fileName: action.fileName };
-    case "event":
-      return applyEvent(state, action.event);
-    case "fail":
-      return { ...state, phase: "error", error: action.message };
-    case "end":
-      return state.phase === "reviewing"
-        ? { ...state, phase: "error", error: "レビュー結果を受け取る前に通信が途中で切れました" }
-        : state;
-    case "toggleIssue":
-      return { ...state, checkedIssues: toggle(state.checkedIssues, action.index) };
-    case "toggleLint":
-      return { ...state, checkedLint: toggle(state.checkedLint, action.index) };
-  }
+  void state;
+  void action;
+  throw new Error("not implemented");
 }
 
-function applyEvent(state: ReviewState, event: ReviewEvent): ReviewState {
-  switch (event.type) {
-    case "meta":
-      return { ...state, meta: event, checkedLint: event.lint.map(() => false) };
-    case "result":
-      return {
-        ...state,
-        phase: "done",
-        review: event.review,
-        verdict: event.verdict,
-        checkedIssues: event.review.issues.map(() => false),
-      };
-    case "error":
-      return { ...state, phase: "error", error: event.message };
-  }
+/** Pages finished (reviewed or failed) out of the pages being reviewed. */
+export function progress(state: ReviewState): { done: number; total: number } {
+  void state;
+  throw new Error("not implemented");
 }
 
-function toggle(flags: boolean[], index: number): boolean[] {
-  return flags.map((flag, i) => (i === index ? !flag : flag));
-}
-
-/** Count review issues per severity. */
-export function severityCounts(review: Review): Record<Severity, number> {
-  const counts: Record<Severity, number> = { 高: 0, 中: 0, 低: 0 };
-  for (const issue of review.issues) counts[issue.severity] += 1;
-  return counts;
-}
-
-/** Number of issues and lint findings not yet ticked as handled. */
-export function remaining(state: ReviewState): { issues: number; lint: number } {
-  const unticked = (flags: boolean[]) => flags.filter((flag) => !flag).length;
-  return { issues: unticked(state.checkedIssues), lint: unticked(state.checkedLint) };
+/** Number of fixes and lint findings not yet ticked as handled. */
+export function remaining(state: ReviewState): { fixes: number; lint: number } {
+  void state;
+  throw new Error("not implemented");
 }

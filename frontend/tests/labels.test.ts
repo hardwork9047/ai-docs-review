@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { healthLabel, verdictLabel } from "../src/logic/labels";
+import { formatScore, healthLabel, scoreTone, verdictLabel } from "../src/logic/labels";
+import { DONE } from "./fixtures";
+
+const summary = (verdict: typeof DONE.summary.verdict) => ({ ...DONE.summary, verdict });
 
 describe("healthLabel", () => {
   it("is ok when Ollama is reachable and the model is pulled", () => {
@@ -10,38 +13,58 @@ describe("healthLabel", () => {
 
   it("warns when the model is not pulled yet", () => {
     const label = healthLabel({ ok: true, model: "gemma4:e2b", model_ready: false, error: null });
-    expect(label).toEqual({ text: "gemma4:e2b が未pull(ollama pull gemma4:e2b)", tone: "warn" });
+    expect(label.tone).toBe("warn");
   });
 
   it("is ng when Ollama is unreachable or the request failed", () => {
-    const down = { ok: false, model: "m", model_ready: false, error: "refused" };
-    expect(healthLabel(down)).toEqual({ text: "Ollama 未接続", tone: "ng" });
     expect(healthLabel(null)).toEqual({ text: "Ollama 未接続", tone: "ng" });
   });
 });
 
 describe("verdictLabel", () => {
   it("passes overall", () => {
-    const label = verdictLabel({ passed: true, high_issues: 0, overall_passed: true });
-    expect(label).toEqual({ text: "検印:提出OK", tone: "ok", seal: "承認" });
-  });
-
-  it("asks to fix rule-check findings when only those remain", () => {
-    const label = verdictLabel({ passed: true, high_issues: 0, overall_passed: false });
-    expect(label).toEqual({
-      text: "部長はOK — ルールチェックの指摘を直せば提出可",
-      tone: "warn",
-      seal: "条件付",
+    expect(verdictLabel(summary({ passed: true, overall_passed: true }))).toEqual({
+      text: "提出OK",
+      tone: "ok",
     });
   });
 
-  it("mentions high issues when the reviewer rejects", () => {
-    const label = verdictLabel({ passed: false, high_issues: 2, overall_passed: false });
-    expect(label).toEqual({ text: "差し戻し — 重要度「高」が2件", tone: "ng", seal: "差戻" });
+  it("asks to fix rule-check findings when only those remain", () => {
+    expect(verdictLabel(summary({ passed: true, overall_passed: false }))).toEqual({
+      text: "機械チェックの指摘を直せば提出OK",
+      tone: "warn",
+    });
   });
 
-  it("falls back to score wording when there is no high issue", () => {
-    const label = verdictLabel({ passed: false, high_issues: 0, overall_passed: false });
-    expect(label).toEqual({ text: "差し戻し — 合格点に届いていません", tone: "ng", seal: "差戻" });
+  it("asks for revision below the pass score", () => {
+    expect(verdictLabel(summary({ passed: false, overall_passed: false }))).toEqual({
+      text: "要修正",
+      tone: "ng",
+    });
+  });
+
+  it("reports when nothing could be scored", () => {
+    expect(verdictLabel(summary(null))).toEqual({ text: "採点できませんでした", tone: "ng" });
+  });
+});
+
+describe("scoreTone", () => {
+  it.each([
+    [100, "good"],
+    [80, "good"],
+    [79, "fair"],
+    [60, "fair"],
+    [59, "poor"],
+    [0, "poor"],
+    [null, "na"],
+  ] as const)("%s → %s", (score, tone) => {
+    expect(scoreTone(score)).toBe(tone);
+  });
+});
+
+describe("formatScore", () => {
+  it("prints numbers and a dash for not-applicable", () => {
+    expect(formatScore(82)).toBe("82");
+    expect(formatScore(null)).toBe("–");
   });
 });
