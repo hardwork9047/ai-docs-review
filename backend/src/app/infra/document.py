@@ -1,6 +1,7 @@
 """Load an upload (.pptx or .pdf) into reviewable `Page`s.
 
 pptx は PDF に変換して画像・計測値を取り、テキストと書体名は pptx 本体から重ねる。
+変換前にテーマの東アジア書体を補う(infra/pptx_fix: 日本語の文字化け対策)。
 """
 
 from collections.abc import Callable
@@ -10,6 +11,7 @@ from app.domain.pages import Page, apply_slide_text
 from app.infra.converter import pptx_to_pdf
 from app.infra.errors import DocumentError
 from app.infra.pdf_reader import read_pdf
+from app.infra.pptx_fix import fill_theme_east_asian_fonts
 from app.infra.pptx_reader import read_slide_texts
 
 Converter = Callable[[bytes, str], bytes]
@@ -42,5 +44,5 @@ def load_document(
     if detect_kind(filename, data) == "pdf":
         return read_pdf(data, image_width)
     slides = read_slide_texts(data)
-    pdf = (convert or pptx_to_pdf)(data, soffice)
+    pdf = (convert or pptx_to_pdf)(fill_theme_east_asian_fonts(data), soffice)
     return apply_slide_text(read_pdf(pdf, image_width), slides)

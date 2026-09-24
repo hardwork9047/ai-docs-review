@@ -50,7 +50,8 @@ def test_fixed_package_is_still_a_valid_presentation_with_same_entries() -> None
 
 def test_explicit_east_asian_font_is_left_alone() -> None:
     once = fill_theme_east_asian_fonts(_pptx())
-    theme = _theme(once).replace('<a:ea typeface="ＭＳ Ｐゴシック"', '<a:ea typeface="游ゴシック"', 1)
+    filled, explicit = '<a:ea typeface="ＭＳ Ｐゴシック"', '<a:ea typeface="游ゴシック"'
+    theme = _theme(once).replace(filled, explicit, 1)
     buf = io.BytesIO()
     with zipfile.ZipFile(io.BytesIO(once)) as src, zipfile.ZipFile(buf, "w") as dst:
         for name in src.namelist():

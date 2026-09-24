@@ -27,3 +27,7 @@
 ## 秘匿
 
 実資料(`~/Documents/company/...`)と採点結果はリポジトリに入れない(scratchpad のみ)。
+
+## デバッグ記録
+
+- Root cause: 日本語テーマの `<a:ea typeface="">` が空(実体は `<a:font script="Jpan">`)だと、LibreOffice はテーマ書体を継承した日本語テキストの書体名を空にし、PDF が未定義フォント(/F7 等)を参照して描画・テキスト抽出とも文字化けする。変換前に a:ea を Jpan 書体で補って解消(実資料 25 ページで化け 0)。Regression test: `backend/tests/integration/test_pptx_fix.py`, `test_document.py::test_pptx_theme_fonts_are_fixed_before_conversion`
