@@ -80,9 +80,16 @@ def build_page_prompt(
     lines += ["", "## 計測値"]
     for m in measured:
         lines.append(
-            f"- {m.criterion}: {m.score}点({m.note})"
+            f"- {m.criterion}: {m.note}(判定: {_band(m.score)})"
             if m.score is not None
             else f"- {m.criterion}: 計測不可"
         )
     lines.append(f"- 埋め込み画像: {page.image_count}個")
     return "\n".join(lines)
+
+
+def _band(score: int) -> str:
+    # 点数をそのまま渡すと小型モデルが「58点」を「58pt」と読み違えるため、言葉で渡す
+    if score >= 80:
+        return "良好"
+    return "やや問題" if score >= 60 else "要改善"
