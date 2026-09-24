@@ -1,7 +1,7 @@
 """Unit tests for app.domain.precheck — LLM を使わない決定的ルールチェック。"""
 
-from app.domain.precheck import MAX_LINE_LEN, LintFinding, run_precheck
 from app.domain.pages import Page
+from app.domain.precheck import MAX_LINE_LEN, LintFinding, run_precheck
 
 
 def _deck(*bodies: str, title: str = "表紙") -> list[Page]:

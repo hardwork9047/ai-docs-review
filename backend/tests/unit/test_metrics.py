@@ -81,4 +81,5 @@ def test_text_amount_bands(chars: int, expected: int) -> None:
 
 
 def test_measure_returns_the_three_deterministic_criteria() -> None:
-    assert [s.criterion for s in measure(_page((18.0,)))] == ["フォントサイズ", "フォント", "文字量"]
+    criteria = [s.criterion for s in measure(_page((18.0,)))]
+    assert criteria == ["フォントサイズ", "フォント", "文字量"]

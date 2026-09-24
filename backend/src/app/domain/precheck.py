@@ -7,7 +7,7 @@ LLM には判断が要る批評だけを任せる。結果は毎回同じで説�
 import re
 from dataclasses import dataclass
 
-from app.domain.slides import Slide
+from app.domain.pages import Page
 
 # 両方の表記が資料内に共存していたら指摘する表記ゆれペア(社内標準に合わせて育てる)
 YURAGI_PAIRS: list[tuple[str, str]] = [
@@ -30,13 +30,13 @@ class LintFinding:
     detail: str
 
 
-def run_precheck(slides: list[Slide]) -> list[LintFinding]:
+def run_precheck(pages: list[Page]) -> list[LintFinding]:
     """Run all deterministic checks over the deck and return findings in rule order.
 
     Checks titles and bodies (not speaker notes). An empty list means the deck passes.
     """
     findings: list[LintFinding] = []
-    full_text = "\n".join(f"{s.title}\n{s.body}" for s in slides)
+    full_text = "\n".join(f"{s.title}\n{s.body}" for s in pages)
 
     for long_form, short_form in YURAGI_PAIRS:
         # 短い表記は長い表記の部分文字列になりうるので、直後に「ー」が続くものは除外する
@@ -48,13 +48,13 @@ def run_precheck(slides: list[Slide]) -> list[LintFinding]:
     if re.search(r"[ｦ-ﾟ]", full_text):
         findings.append(LintFinding("半角カナ", "半角カタカナが含まれています(全角に統一推奨)"))
 
-    for slide in slides:
+    for slide in pages:
         for line in slide.body.splitlines():
             if len(line) > MAX_LINE_LEN:
                 detail = f"スライド{slide.no}: 1文が{len(line)}字(分割か箇条書き化を推奨)"
                 findings.append(LintFinding("長文", detail))
 
-    if slides and not slides[0].title:
+    if pages and not pages[0].title:
         findings.append(LintFinding("必須項目", "表紙のタイトルが空です"))
 
     return findings

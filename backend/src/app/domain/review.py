@@ -6,6 +6,7 @@ score=None とし、平均から除外する。
 """
 
 import base64
+from collections.abc import Sequence
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -28,12 +29,14 @@ class CriterionScore(BaseModel):
 class PageAssessment(BaseModel):
     """What the LLM returns for one page (passed to Ollama as the JSON schema)."""
 
-    content_score: int
-    figure_score: int | None
-    chart_score: int | None
-    good_points: list[str]
-    bad_points: list[str]
-    fixes: list[str]
+    content_score: int = Field(ge=0, le=100, description="内容の点数(0-100)")
+    figure_score: int | None = Field(
+        ge=0, le=100, description="図(写真・イラスト・図解・表)の点数。図が無ければ null"
+    )
+    chart_score: int | None = Field(ge=0, le=100, description="グラフの点数。グラフが無ければ null")
+    good_points: list[str] = Field(description="このページの良い点(1〜3件)")
+    bad_points: list[str] = Field(description="このページの悪い点(1〜3件)")
+    fixes: list[str] = Field(description="具体的な修正点(1〜3件)")
 
 
 class PageResult(BaseModel):
@@ -57,7 +60,26 @@ class PageResult(BaseModel):
         cls, page: Page, assessment: PageAssessment, measured: list[CriterionScore]
     ) -> "PageResult":
         """Merge the LLM assessment with the measured criteria for `page`."""
-        raise NotImplementedError
+        judged = {
+            "内容": assessment.content_score,
+            "図": assessment.figure_score,
+            "グラフ": assessment.chart_score,
+        }
+        by_criterion = {m.criterion: m for m in measured}
+        scores = [
+            by_criterion.get(c) or CriterionScore(criterion=c, score=judged.get(c))
+            for c in CRITERIA
+        ]
+        return cls(
+            no=page.no,
+            title=page.title,
+            scores=scores,
+            score=_mean([s.score for s in scores]),
+            good_points=assessment.good_points,
+            bad_points=assessment.bad_points,
+            fixes=assessment.fixes,
+            thumbnail=encode_thumbnail(page.image),
+        )
 
 
 class Verdict(BaseModel):
@@ -84,7 +106,30 @@ def summarize(
     results: list[PageResult], failed_pages: int, lint: list[LintFinding], pass_score: int
 ) -> Summary:
     """Average each criterion over the pages where it applies, then judge."""
-    raise NotImplementedError
+    criteria = []
+    for criterion in CRITERIA:
+        values = [s.score for r in results for s in r.scores if s.criterion == criterion]
+        applicable = [v for v in values if v is not None]
+        note = f"{len(applicable)}ページ" if applicable else ""
+        criteria.append(CriterionScore(criterion=criterion, score=_mean(applicable), note=note))
+
+    score = _mean([r.score for r in results])
+    verdict = None
+    if score is not None:
+        passed = score >= pass_score
+        verdict = Verdict(passed=passed, overall_passed=passed and not lint)
+    return Summary(
+        criteria=criteria,
+        score=score,
+        reviewed_pages=len(results),
+        failed_pages=failed_pages,
+        verdict=verdict,
+    )
+
+
+def _mean(values: Sequence[int | None]) -> int | None:
+    applicable = [v for v in values if v is not None]
+    return round(sum(applicable) / len(applicable)) if applicable else None
 
 
 def encode_thumbnail(image: bytes) -> str:

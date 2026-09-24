@@ -44,4 +44,8 @@ def apply_slide_text(pages: list[Page], slides: list[SlideText]) -> list[Page]:
     Pages and slides are matched by position; pages without a matching slide are
     returned unchanged. Measured values (`char_sizes`, `image`, ...) are kept.
     """
-    raise NotImplementedError
+    merged = [
+        replace(page, title=s.title, body=s.body, notes=s.notes, fonts=s.fonts)
+        for page, s in zip(pages, slides, strict=False)
+    ]
+    return merged + pages[len(merged) :]

@@ -8,12 +8,20 @@ without Ollama. The API layer serialises each event as one NDJSON line:
 from collections.abc import AsyncIterator, Sequence
 from typing import Any, Literal, Protocol
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
+from app.domain.metrics import measure
 from app.domain.pages import Page
-from app.domain.precheck import LintFinding
-from app.domain.review import CRITERIA, Criterion, PageResult, Summary
-from app.domain.reviewer import BOSS, Reviewer, ReviewerProfile
+from app.domain.precheck import LintFinding, run_precheck
+from app.domain.review import (
+    CRITERIA,
+    Criterion,
+    PageAssessment,
+    PageResult,
+    Summary,
+    summarize,
+)
+from app.domain.reviewer import BOSS, Reviewer, ReviewerProfile, build_page_prompt
 
 
 class LLMError(Exception):
@@ -77,5 +85,36 @@ async def review_document(
     Only the first `max_pages` pages are reviewed. A failing page does not stop the
     others, because the HTTP response is already streaming.
     """
-    raise NotImplementedError
-    yield  # pragma: no cover - makes this an async generator
+    lint = run_precheck(pages)
+    yield MetaEvent(
+        page_count=len(pages),
+        truncated=len(pages) > max_pages,
+        lint=lint,
+        reviewer=reviewer.profile,
+    )
+
+    targets = pages[:max_pages]
+    outline = [p.title for p in targets]
+    schema = PageAssessment.model_json_schema()
+    results: list[PageResult] = []
+    failed = 0
+    for page in targets:
+        measured = measure(page)
+        prompt = build_page_prompt(page, len(targets), outline, measured)
+        images = [page.image] if page.image else []
+        try:
+            raw = await llm.complete(reviewer.system_prompt, prompt, schema, images)
+            assessment = PageAssessment.model_validate_json(raw)
+        except LLMError as exc:
+            failed += 1
+            yield PageErrorEvent(no=page.no, message=f"LLMの呼び出しに失敗しました: {exc}")
+            continue
+        except ValidationError as exc:
+            failed += 1
+            yield PageErrorEvent(no=page.no, message=f"LLMの出力がスキーマに合いません: {exc}")
+            continue
+        result = PageResult.build(page, assessment, measured)
+        results.append(result)
+        yield PageEvent(result=result)
+
+    yield DoneEvent(summary=summarize(results, failed, lint, reviewer.pass_score))

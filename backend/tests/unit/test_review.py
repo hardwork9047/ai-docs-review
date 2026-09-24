@@ -20,7 +20,9 @@ MEASURED = [
 ]
 
 
-def _assessment(content: int = 70, figure: int | None = 90, chart: int | None = None) -> PageAssessment:
+def _assessment(
+    content: int = 70, figure: int | None = 90, chart: int | None = None
+) -> PageAssessment:
     return PageAssessment(
         content_score=content,
         figure_score=figure,
