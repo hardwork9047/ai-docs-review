@@ -1,47 +1,84 @@
 # 部長レビュー(ai-docs-review)
 
-提出前のパワポ(.pptx)を、**多忙な部長の視点**でローカル LLM(Ollama)がレビューする Web アプリ。
-ファイルはメモリ上でのみ処理し、ディスクにも社外にも出さない。
+提出前の資料(**.pptx / .pdf**)を、**多忙な部長の視点**で 1 ページずつ採点する Web アプリ。
+LLM はローカルまたは Google Colab 上の Ollama(`gemma4:e2b`、vision 対応)を使う。
 
-- **部長の所見**: 結論ファースト・資料の目的・意思決定に使える数字・依頼事項と期限を評価(0〜100点+朱書き指摘)
+- **ページ別の採点**: 各ページに 6 基準のスコアと「良い点・悪い点・修正点」
+  | 基準 | 採点者 | 方法 |
+  |---|---|---|
+  | 内容 | LLM | ページ画像 + テキスト + 資料全体の構成から判断 |
+  | 図 / グラフ | LLM | ページ画像を見て判断。無いページは対象外(–) |
+  | フォントサイズ | 計測 | 14pt 未満の文字の割合(PDF の実寸) |
+  | フォント | 計測 | ページ内の書体ファミリー数(pptx は元ファイルの書体) |
+  | 文字量 | 計測 | ページの文字数(150字以下が満点) |
 - **機械チェック**: 表記ゆれ・半角カナ・長文・表紙タイトルを LLM なしで即時判定
-- **検印**: 評点 70 以上かつ重要度「高」ゼロで部長 OK。機械チェックもゼロなら「承認」
-
-元になった五視点版(penta-review)から、上司(部長)一名に絞って作り直したもの。
+- **総合判定**: 全ページ平均 70 点以上で合格。機械チェックもゼロなら「提出OK」
+- **Markdown ダウンロード**: 採点結果(修正点のチェック状態つき)を `.md` で保存
+- pptx は LibreOffice で PDF 化し、ページ画像・文字サイズは PDF から、テキスト・書体は pptx から読む
 
 ## 必要なツール
 
 - [uv](https://docs.astral.sh/uv/)、[pnpm](https://pnpm.io/) + Node.js 22+(`corepack enable pnpm`)
-- [Ollama](https://ollama.com/) と使用モデル: `ollama pull gemma4:e2b`
+- [LibreOffice](https://www.libreoffice.org/)(pptx の PDF 変換。macOS: `brew install --cask libreoffice`)
+- [Ollama](https://ollama.com/) と `gemma4:e2b`(ローカル、または下記の Colab)
 - 開発ワークフロー用: [gh](https://cli.github.com/)、Claude Code
 
-## 起動
+## ローカルで起動
 
 ```bash
 make setup
-make dev-backend    # http://localhost:8000(API)
-make dev-frontend   # http://localhost:5173(画面。/api は backend へ proxy)
+REVIEW_OLLAMA_URL=http://localhost:11434 make dev-backend   # :8000(API)
+make dev-frontend                                          # :5173(画面。/api は backend へ proxy)
 ```
 
-ブラウザで http://localhost:5173 を開き、.pptx をドロップする。右上のランプで Ollama の接続とモデルの pull 状況を確認できる。
+## Google Colab の Ollama を使う
+
+Colab(GPU ランタイム)で Ollama を**全インターフェースで**起動し、Cloudflare Quick Tunnel で公開する。
+`OLLAMA_HOST=0.0.0.0` を付けないと、トンネル経由のリクエストは Host ヘッダ検査で 403 になる。
+
+```python
+!curl -fsSL https://ollama.com/install.sh | sh
+import subprocess, os
+env = {**os.environ, "OLLAMA_HOST": "0.0.0.0:11434", "OLLAMA_ORIGINS": "*"}
+subprocess.Popen(["ollama", "serve"], env=env, stdout=open("ollama.log", "w"), stderr=subprocess.STDOUT)
+!sleep 5 && ollama pull gemma4:e2b
+# cloudflared を入れて起動し、表示された https://xxxx.trycloudflare.com を控える
+!cloudflared tunnel --url http://localhost:11434
+```
+
+控えた URL を `REVIEW_OLLAMA_URL` に設定する。Quick Tunnel の URL は起動のたびに変わる。
+
+## Render でホスティング
+
+1. このリポジトリを Render に接続し、**Blueprint**(`render.yaml`)から作成する
+   - `Dockerfile` が frontend をビルドし、LibreOffice + 日本語フォント入りのイメージで FastAPI が画面と API を同一オリジンで配信する
+2. ダッシュボードの Environment で `REVIEW_OLLAMA_URL` に Colab のトンネル URL を設定する(Colab を再起動したら更新)
+3. プランは **Starter 以上**を推奨(LibreOffice の変換が CPU を使う。25 ページ・15MB の pptx で手元 Mac 約 40 秒)
+
+> **公開時の注意**: Render の URL を知っていれば誰でもアップロードでき、Colab の GPU を消費する。
+> アップロードした資料は Render と Colab(Cloudflare 経由)に送られる。社外秘の資料を扱う場合は、
+> アクセス制限(Render の IP 制限や前段の認証)を検討すること。
 
 ## 設定(環境変数)
 
 | 変数 | 既定値 | 用途 |
 |---|---|---|
-| `REVIEW_OLLAMA_URL` | `http://localhost:11434` | Ollama の URL |
-| `REVIEW_MODEL` | `gemma4:e2b` | 使用モデル(`ollama list` の名前) |
-| `REVIEW_TEMPERATURE` | `0.2` | 生成温度(批評は再現性重視で低め) |
-| `REVIEW_NUM_CTX` | `8192` | コンテキスト長。30枚超の資料は `16384` に |
-| `REVIEW_MAX_SLIDES` | `40` | LLM に渡す最大枚数 |
-| `REVIEW_TIMEOUT_SECONDS` | `600` | LLM 応答のタイムアウト |
-
-例: `REVIEW_MODEL=gemma3:4b make dev-backend`
+| `REVIEW_OLLAMA_URL` | `http://localhost:11434` | Ollama の URL(Colab のトンネル URL など) |
+| `REVIEW_MODEL` | `gemma4:e2b` | 使用モデル(vision 対応が必要) |
+| `REVIEW_THINK` | 未設定(モデル既定) | `false` で思考を止めて速くする |
+| `REVIEW_TEMPERATURE` / `REVIEW_NUM_CTX` | `0.2` / `8192` | 推論パラメータ |
+| `REVIEW_TIMEOUT_SECONDS` | `600` | 1 ページあたりの LLM タイムアウト |
+| `REVIEW_MAX_PAGES` | `40` | 採点する最大ページ数 |
+| `REVIEW_MAX_UPLOAD_MB` | `50` | アップロード上限 |
+| `REVIEW_IMAGE_WIDTH` | `1024` | LLM に渡すページ画像の幅(px) |
+| `REVIEW_SOFFICE_PATH` | 自動検出 | LibreOffice `soffice` のパス |
+| `REVIEW_STATIC_DIR` | 未設定 | ビルド済み frontend の配信元(Docker で設定済み) |
 
 ## API
 
 - `GET /api/health` — `{ok, model, model_ready, error}`
-- `POST /api/review`(multipart `file`)— NDJSON で `meta`(枚数・機械チェック・レビュアー)→ `result`(所見・判定)または `error` の順に流す
+- `POST /api/review`(multipart `file`、.pptx / .pdf のみ)— NDJSON で
+  `meta`(ページ数・機械チェック)→ `page` / `page_error`(1 ページずつ)→ `done`(基準別平均・判定)
 
 ## 開発の回し方
 
@@ -87,13 +124,15 @@ make dev-frontend   # http://localhost:5173(画面。/api は backend へ proxy)
 
 ```
 backend/src/app/
-  domain/   slides(プロンプト組立)/ precheck(機械チェック)/ review(スキーマ・判定)
-            reviewer(部長の定義)/ service(meta→result|error のイベント生成)
-  infra/    pptx_reader / ollama / settings
+  domain/   pages(ページ・pptx テキスト重ね合わせ)/ metrics(計測で採点する3基準)
+            review(6基準・LLM スキーマ・集計)/ reviewer(部長の定義・ページ用プロンプト)
+            precheck(機械チェック)/ service(meta→page…→done のイベント生成)
+  infra/    document(形式判定・読み込み)/ converter(LibreOffice)/ pdf_reader / pptx_reader
+            ollama(stream + 画像)/ settings
   api/      routes(/api/health, /api/review)
 frontend/src/
-  logic/    events / ndjson / state(reducer)/ labels / escape  ← vitest
+  logic/    events / ndjson / state(reducer)/ labels / markdown / files / escape  ← vitest
   ui/       DOM 描画・イベント結線(テスト免除)
+Dockerfile, render.yaml   Render 用
 plans/      plan・workflow_state・findings
-.claude/    skills + code-reviewer agent
 ```

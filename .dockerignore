@@ -1,0 +1,15 @@
+.git
+.github
+.claude
+plans
+bin
+**/node_modules
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+frontend/dist
+backend/tests
+*.md
+!frontend/**/*.md

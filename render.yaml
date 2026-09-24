@@ -1,0 +1,21 @@
+# Render Blueprint: リポジトリを Render に接続すると、この定義で Web サービスが作られる。
+# LLM は Google Colab 上の Ollama(gemma4:e2b)を Cloudflare トンネル経由で使う。
+services:
+  - type: web
+    name: buchou-review
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    # LibreOffice の変換は CPU を使うので Starter 以上を推奨(Free は 0.1 CPU で変換が極端に遅い)
+    plan: starter
+    healthCheckPath: /api/health
+    envVars:
+      # Colab で `cloudflared tunnel --url http://localhost:11434` が出した URL。
+      # Quick Tunnel の URL は Colab を再起動するたびに変わるので、そのつどダッシュボードで更新する
+      - key: REVIEW_OLLAMA_URL
+        sync: false
+      - key: REVIEW_MODEL
+        value: gemma4:e2b
+      - key: REVIEW_MAX_PAGES
+        value: "40"
+      - key: REVIEW_MAX_UPLOAD_MB
+        value: "50"
