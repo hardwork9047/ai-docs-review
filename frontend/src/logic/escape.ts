@@ -10,3 +10,12 @@ const ENTITIES: Record<string, string> = {
 export function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (c) => ENTITIES[c] ?? c);
 }
+
+/**
+ * Escape `text`, then turn `**bold**` (which the LLM often emits) into <strong>.
+ * No other Markdown is interpreted, so the result is safe to assign to innerHTML.
+ */
+export function formatInline(text: string): string {
+  void text;
+  throw new Error("not implemented");
+}
