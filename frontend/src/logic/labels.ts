@@ -26,18 +26,21 @@ export function healthLabel(health: Health | null): { text: string; tone: Tone }
 
 /** Headline verdict for the whole document. */
 export function verdictLabel(summary: Summary): { text: string; tone: Tone } {
-  void summary;
-  throw new Error("not implemented");
+  const { verdict } = summary;
+  if (!verdict) return { text: "採点できませんでした", tone: "ng" };
+  if (verdict.overall_passed) return { text: "提出OK", tone: "ok" };
+  if (verdict.passed) return { text: "機械チェックの指摘を直せば提出OK", tone: "warn" };
+  return { text: "要修正", tone: "ng" };
 }
 
 /** Colour band for a score. */
 export function scoreTone(score: number | null): ScoreTone {
-  void score;
-  throw new Error("not implemented");
+  if (score === null) return "na";
+  if (score >= 80) return "good";
+  return score >= 60 ? "fair" : "poor";
 }
 
 /** "82" or "–" when not applicable. */
 export function formatScore(score: number | null): string {
-  void score;
-  throw new Error("not implemented");
+  return score === null ? "–" : String(score);
 }

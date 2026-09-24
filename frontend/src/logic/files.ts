@@ -7,6 +7,6 @@ export const ACCEPT = ".pptx,.pdf";
 
 /** "pptx" / "pdf" for accepted file names (case-insensitive), otherwise null. */
 export function uploadKind(fileName: string): UploadKind | null {
-  void fileName;
-  throw new Error("not implemented");
+  const match = /\.(pptx|pdf)$/i.exec(fileName);
+  return match ? (match[1]!.toLowerCase() as UploadKind) : null;
 }

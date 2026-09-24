@@ -47,10 +47,7 @@ export const initialState: ReviewState = {
 
 /** Checkbox key for a page's fix (`page`, 0-based `index`) or a lint finding (`page` = 0). */
 export function checkKey(kind: "fix" | "lint", page: number, index: number): string {
-  void kind;
-  void page;
-  void index;
-  throw new Error("not implemented");
+  return `${kind}:${page}:${index}`;
 }
 
 /**
@@ -58,19 +55,58 @@ export function checkKey(kind: "fix" | "lint", page: number, index: number): str
  * `end` (stream closed) while still reviewing means `done` never arrived → error.
  */
 export function reduce(state: ReviewState, action: Action): ReviewState {
-  void state;
-  void action;
-  throw new Error("not implemented");
+  switch (action.kind) {
+    case "start":
+      return { ...initialState, phase: "reviewing", fileName: action.fileName };
+    case "event":
+      return applyEvent(state, action.event);
+    case "fail":
+      return { ...state, phase: "error", error: action.message };
+    case "end":
+      return state.phase === "reviewing"
+        ? { ...state, phase: "error", error: "採点が終わる前に通信が途中で切れました" }
+        : state;
+    case "toggle":
+      return {
+        ...state,
+        checked: state.checked.includes(action.key)
+          ? state.checked.filter((k) => k !== action.key)
+          : [...state.checked, action.key],
+      };
+  }
+}
+
+function applyEvent(state: ReviewState, event: ReviewEvent): ReviewState {
+  switch (event.type) {
+    case "meta":
+      return { ...state, meta: event };
+    case "page":
+      return {
+        ...state,
+        pages: [...state.pages, event.result].sort((a, b) => a.no - b.no),
+      };
+    case "page_error":
+      return {
+        ...state,
+        pageErrors: [...state.pageErrors, { no: event.no, message: event.message }],
+      };
+    case "done":
+      return { ...state, phase: "done", summary: event.summary };
+  }
 }
 
 /** Pages finished (reviewed or failed) out of the pages being reviewed. */
 export function progress(state: ReviewState): { done: number; total: number } {
-  void state;
-  throw new Error("not implemented");
+  return {
+    done: state.pages.length + state.pageErrors.length,
+    total: state.meta?.review_count ?? 0,
+  };
 }
 
 /** Number of fixes and lint findings not yet ticked as handled. */
 export function remaining(state: ReviewState): { fixes: number; lint: number } {
-  void state;
-  throw new Error("not implemented");
+  const open = (keys: string[]) => keys.filter((k) => !state.checked.includes(k)).length;
+  const fixKeys = state.pages.flatMap((p) => p.fixes.map((_, i) => checkKey("fix", p.no, i)));
+  const lintKeys = (state.meta?.lint ?? []).map((_, i) => checkKey("lint", 0, i));
+  return { fixes: open(fixKeys), lint: open(lintKeys) };
 }

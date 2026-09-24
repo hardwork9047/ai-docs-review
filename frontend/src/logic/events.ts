@@ -83,7 +83,10 @@ const TYPES: ReadonlySet<string> = new Set(["meta", "page", "page_error", "done"
 
 /** Parse one NDJSON line. Throws on invalid JSON or an unknown `type`. */
 export function parseEvent(line: string): ReviewEvent {
-  void line;
-  void TYPES;
-  throw new Error("not implemented");
+  const data: unknown = JSON.parse(line);
+  const type = typeof data === "object" && data !== null ? (data as { type?: unknown }).type : null;
+  if (typeof type !== "string" || !TYPES.has(type)) {
+    throw new Error(`unknown event: ${line}`);
+  }
+  return data as ReviewEvent;
 }
