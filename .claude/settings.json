@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(make setup)",
+      "Bash(make test*)",
+      "Bash(make lint)",
+      "Bash(make format)",
+      "Bash(make typecheck)",
+      "Bash(make check)",
+      "Bash(uv sync*)",
+      "Bash(uv run pytest*)",
+      "Bash(uv run ruff*)",
+      "Bash(uv run mypy*)",
+      "Bash(pnpm install*)",
+      "Bash(pnpm test*)",
+      "Bash(pnpm typecheck)",
+      "Bash(pnpm build)",
+      "Bash(pnpm vitest*)",
+      "Bash(gh issue view*)",
+      "Bash(gh issue list*)",
+      "Bash(gh pr view*)",
+      "Bash(gh pr list*)",
+      "Bash(gh pr diff*)",
+      "Bash(find . *)",
+      "Bash(grep *)"
+    ],
+    "deny": []
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r '.tool_input.file_path // empty'); case \"$f\" in */backend/*.py) uv run --project \"$CLAUDE_PROJECT_DIR/backend\" ruff format \"$f\" >/dev/null 2>&1 || true ;; esac"
+          }
+        ]
+      }
+    ]
+  }
+}

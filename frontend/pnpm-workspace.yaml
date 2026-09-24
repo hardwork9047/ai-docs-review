@@ -1,0 +1,4 @@
+# pnpm 設定(pnpm 10+ は package.json の "pnpm" フィールドを読まない)
+# esbuild の postinstall(ネイティブバイナリ配置)を許可する
+allowBuilds:
+  esbuild: true
