@@ -29,3 +29,14 @@ def test_pages_without_matching_slide_are_unchanged() -> None:
 def test_extra_slides_are_ignored() -> None:
     slides = [SlideText("a", ""), SlideText("b", ""), SlideText("c", "")]
     assert [p.title for p in apply_slide_text(RENDERED, slides)] == ["a", "b"]
+
+
+def test_empty_slide_title_falls_back_to_the_rendered_title() -> None:
+    # 表紙などタイトル枠を使わずテキストボックスで書いたスライド
+    rendered = [Page(no=1, title="提案書", body="")]
+    assert apply_slide_text(rendered, [SlideText("", "本文")])[0].title == "提案書"
+
+
+def test_garbled_rendered_title_is_not_used_as_fallback() -> None:
+    rendered = [Page(no=1, title="(cid:11)(cid:12)", body="")]
+    assert apply_slide_text(rendered, [SlideText("", "本文")])[0].title == ""
