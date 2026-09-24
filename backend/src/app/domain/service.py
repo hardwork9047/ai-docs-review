@@ -7,12 +7,12 @@ without Ollama. The API layer serialises each event as one NDJSON line.
 from collections.abc import AsyncIterator
 from typing import Any, Literal, Protocol
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
-from app.domain.precheck import LintFinding
-from app.domain.review import Review, Verdict
+from app.domain.precheck import LintFinding, run_precheck
+from app.domain.review import Review, Verdict, judge
 from app.domain.reviewer import BOSS, Reviewer, ReviewerProfile
-from app.domain.slides import Slide
+from app.domain.slides import Slide, build_user_prompt
 
 
 class LLMError(Exception):
@@ -63,5 +63,23 @@ async def review_deck(
     LLM backend errors and invalid LLM output become an `ErrorEvent` rather than
     raising, because the HTTP response has already started streaming by then.
     """
-    raise NotImplementedError
-    yield  # pragma: no cover - makes this an async generator
+    lint = run_precheck(slides)
+    yield MetaEvent(
+        slide_count=len(slides),
+        truncated=len(slides) > max_slides,
+        lint=lint,
+        reviewer=reviewer.profile,
+    )
+
+    user_prompt = build_user_prompt(slides, max_slides)
+    try:
+        raw = await llm.complete(reviewer.system_prompt, user_prompt, Review.model_json_schema())
+        review = Review.model_validate_json(raw)
+    except LLMError as exc:
+        yield ErrorEvent(message=f"LLMの呼び出しに失敗しました: {exc}")
+        return
+    except ValidationError as exc:
+        yield ErrorEvent(message=f"LLMの出力がスキーマに合いません: {exc}")
+        return
+
+    yield ResultEvent(review=review, verdict=judge(review, lint, reviewer.pass_score))
