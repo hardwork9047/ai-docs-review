@@ -1,0 +1,348 @@
+:root {
+  --paper: #e9edf1; /* 事務用紙の青みグレー */
+  --sheet: #f8fafb;
+  --ink: #1b2a41; /* 紺インク */
+  --ink-soft: #55657a;
+  --rule: #b9c8d8; /* 帳票の罫線 */
+  --shu: #c8261d; /* 朱肉 */
+  --amber: #b7791f;
+  --ok: #1f7a4d;
+  --mincho: "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", serif;
+  --gothic: "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", "Noto Sans JP", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 15px/1.7 var(--gothic);
+}
+
+.app {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 32px 20px 80px;
+}
+
+header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: 8px;
+}
+
+h1 {
+  font: 600 28px/1.2 var(--mincho);
+  letter-spacing: 0.08em;
+  margin: 0;
+}
+
+h2 {
+  font: 600 18px/1.4 var(--mincho);
+  letter-spacing: 0.05em;
+  margin: 0 0 12px;
+}
+
+.lamp {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.lamp::before {
+  content: "●";
+  margin-right: 6px;
+}
+
+.tone-ok {
+  color: var(--ok);
+}
+
+.tone-warn {
+  color: var(--amber);
+}
+
+.tone-ng {
+  color: var(--shu);
+}
+
+.lead {
+  color: var(--ink-soft);
+  margin: 12px 0 24px;
+}
+
+/* 提出箱(ドロップゾーン) */
+.tray {
+  display: block;
+  border: 2px dashed var(--rule);
+  background: var(--sheet);
+  padding: 28px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.tray:hover,
+.tray.over {
+  border-color: var(--ink);
+}
+
+.tray.busy {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.tray input {
+  display: none;
+}
+
+.tray strong {
+  font: 600 17px var(--mincho);
+}
+
+.tray small {
+  display: block;
+  color: var(--ink-soft);
+  margin-top: 4px;
+}
+
+/* 稟議シート */
+.sheet {
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  margin-top: 24px;
+  padding: 24px;
+}
+
+.approval {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr) 120px;
+  border: 1px solid var(--ink);
+}
+
+.approval > div {
+  border-right: 1px solid var(--ink);
+  padding: 8px 12px;
+}
+
+.approval > div:last-child {
+  border-right: 0;
+}
+
+.approval .k {
+  font-size: 12px;
+  color: var(--ink-soft);
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 4px;
+}
+
+.approval .v {
+  font: 600 24px/1.3 var(--mincho);
+}
+
+.seal-box {
+  display: grid;
+  place-items: center;
+  min-height: 96px;
+}
+
+.seal {
+  width: 84px;
+  height: 84px;
+  border: 3px solid var(--shu);
+  border-radius: 50%;
+  color: var(--shu);
+  display: grid;
+  place-items: center;
+  font: 700 22px/1 var(--mincho);
+  letter-spacing: 0.1em;
+  transform: rotate(-8deg);
+  opacity: 0.88;
+}
+
+.seal.pending {
+  border-style: dotted;
+  border-color: var(--rule);
+  color: var(--rule);
+  font-size: 13px;
+}
+
+.seal.press {
+  animation: press 0.45s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+@keyframes press {
+  from {
+    transform: rotate(-20deg) scale(1.8);
+    opacity: 0;
+  }
+  to {
+    transform: rotate(-8deg) scale(1);
+    opacity: 0.88;
+  }
+}
+
+.verdict {
+  font: 600 16px var(--mincho);
+  margin: 16px 0 0;
+}
+
+section {
+  margin-top: 28px;
+}
+
+.reviewer {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.reviewer .stance {
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.comment {
+  border-left: 3px solid var(--ink);
+  padding: 4px 0 4px 14px;
+  font-family: var(--mincho);
+  font-size: 16px;
+}
+
+.good {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+}
+
+.good li::before {
+  content: "◎ ";
+  color: var(--ok);
+}
+
+.count {
+  font-size: 13px;
+  color: var(--ink-soft);
+  font-family: var(--gothic);
+  font-weight: 400;
+  margin-left: 8px;
+}
+
+.item {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--rule);
+  cursor: pointer;
+}
+
+.item input {
+  margin-top: 6px;
+  accent-color: var(--ink);
+}
+
+.item.done .body {
+  opacity: 0.45;
+  text-decoration: line-through;
+  text-decoration-color: var(--shu);
+}
+
+.chip {
+  display: inline-block;
+  font-size: 12px;
+  line-height: 1;
+  padding: 4px 6px;
+  margin-right: 6px;
+  border: 1px solid var(--ink-soft);
+  color: var(--ink-soft);
+}
+
+.sev-高 {
+  border-color: var(--shu);
+  background: var(--shu);
+  color: #fff;
+}
+
+.sev-中 {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+.why {
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+
+.fix {
+  color: var(--shu);
+  font-size: 14px;
+}
+
+.fix::before {
+  content: "朱書き:";
+  font-weight: 600;
+}
+
+.waiting {
+  color: var(--ink-soft);
+}
+
+.waiting::after {
+  content: "";
+  display: inline-block;
+  width: 1em;
+  animation: dots 1.2s steps(4) infinite;
+  overflow: hidden;
+  vertical-align: bottom;
+}
+
+@keyframes dots {
+  0% {
+    content: "";
+  }
+  25% {
+    content: "・";
+  }
+  50% {
+    content: "・・";
+  }
+  75% {
+    content: "・・・";
+  }
+}
+
+.error {
+  color: var(--shu);
+  border: 1px solid var(--shu);
+  padding: 12px;
+}
+
+.empty {
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+
+@media (max-width: 600px) {
+  .approval {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .approval > div:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--ink);
+  }
+
+  .approval > div:nth-child(2n) {
+    border-right: 0;
+  }
+}
+
+.approval .v.title {
+  font-size: 15px;
+  word-break: break-all;
+}
