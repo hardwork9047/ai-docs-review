@@ -1,18 +1,19 @@
-"""Review orchestration: rule checks, one LLM review, verdict — emitted as events.
+"""Review orchestration: rule checks, then one LLM call per page, then a summary.
 
 The LLM is injected through the `ReviewLLM` port so this module stays testable
-without Ollama. The API layer serialises each event as one NDJSON line.
+without Ollama. The API layer serialises each event as one NDJSON line:
+`meta` → (`page` | `page_error`) x pages → `done`.
 """
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from typing import Any, Literal, Protocol
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
-from app.domain.precheck import LintFinding, run_precheck
-from app.domain.review import Review, Verdict, judge
+from app.domain.pages import Page
+from app.domain.precheck import LintFinding
+from app.domain.review import CRITERIA, Criterion, PageResult, Summary
 from app.domain.reviewer import BOSS, Reviewer, ReviewerProfile
-from app.domain.slides import Slide, build_user_prompt
 
 
 class LLMError(Exception):
@@ -20,10 +21,15 @@ class LLMError(Exception):
 
 
 class ReviewLLM(Protocol):
-    """Port for a chat LLM that returns JSON constrained by a JSON schema."""
+    """Port for a (vision) chat LLM that returns JSON constrained by a JSON schema."""
 
-    async def complete(self, system: str, user: str, schema: dict[str, Any]) -> str:
-        """Return the raw JSON text of the reply. Raise `LLMError` on backend failure."""
+    async def complete(
+        self, system: str, user: str, schema: dict[str, Any], images: Sequence[bytes] = ()
+    ) -> str:
+        """Return the raw JSON text of the reply. Raise `LLMError` on backend failure.
+
+        `images` are attached to the user message (JPEG/PNG bytes).
+        """
         ...
 
 
@@ -31,55 +37,45 @@ class MetaEvent(BaseModel):
     """First event: available immediately, before the LLM runs."""
 
     type: Literal["meta"] = "meta"
-    slide_count: int
+    page_count: int
     truncated: bool
     lint: list[LintFinding]
     reviewer: ReviewerProfile
+    criteria: list[Criterion] = list(CRITERIA)
 
 
-class ResultEvent(BaseModel):
-    """Final event on success: the validated review and its verdict."""
+class PageEvent(BaseModel):
+    """One page reviewed successfully."""
 
-    type: Literal["result"] = "result"
-    review: Review
-    verdict: Verdict
+    type: Literal["page"] = "page"
+    result: PageResult
 
 
-class ErrorEvent(BaseModel):
-    """Final event on failure: the LLM failed or replied with schema-invalid JSON."""
+class PageErrorEvent(BaseModel):
+    """One page could not be reviewed (LLM failure or schema-invalid reply)."""
 
-    type: Literal["error"] = "error"
+    type: Literal["page_error"] = "page_error"
+    no: int
     message: str
 
 
-Event = MetaEvent | ResultEvent | ErrorEvent
+class DoneEvent(BaseModel):
+    """Last event: the whole-document summary and verdict."""
+
+    type: Literal["done"] = "done"
+    summary: Summary
 
 
-async def review_deck(
-    slides: list[Slide], llm: ReviewLLM, *, max_slides: int, reviewer: Reviewer = BOSS
+Event = MetaEvent | PageEvent | PageErrorEvent | DoneEvent
+
+
+async def review_document(
+    pages: list[Page], llm: ReviewLLM, *, max_pages: int, reviewer: Reviewer = BOSS
 ) -> AsyncIterator[Event]:
-    """Yield a `MetaEvent`, then exactly one `ResultEvent` or `ErrorEvent`.
+    """Yield `MetaEvent`, one `PageEvent`/`PageErrorEvent` per page, then `DoneEvent`.
 
-    LLM backend errors and invalid LLM output become an `ErrorEvent` rather than
-    raising, because the HTTP response has already started streaming by then.
+    Only the first `max_pages` pages are reviewed. A failing page does not stop the
+    others, because the HTTP response is already streaming.
     """
-    lint = run_precheck(slides)
-    yield MetaEvent(
-        slide_count=len(slides),
-        truncated=len(slides) > max_slides,
-        lint=lint,
-        reviewer=reviewer.profile,
-    )
-
-    user_prompt = build_user_prompt(slides, max_slides)
-    try:
-        raw = await llm.complete(reviewer.system_prompt, user_prompt, Review.model_json_schema())
-        review = Review.model_validate_json(raw)
-    except LLMError as exc:
-        yield ErrorEvent(message=f"LLMの呼び出しに失敗しました: {exc}")
-        return
-    except ValidationError as exc:
-        yield ErrorEvent(message=f"LLMの出力がスキーマに合いません: {exc}")
-        return
-
-    yield ResultEvent(review=review, verdict=judge(review, lint, reviewer.pass_score))
+    raise NotImplementedError
+    yield  # pragma: no cover - makes this an async generator

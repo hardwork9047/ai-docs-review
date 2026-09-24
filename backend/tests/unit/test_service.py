@@ -2,97 +2,141 @@
 
 import asyncio
 import json
+from collections.abc import Sequence
 from typing import Any
 
-from app.domain.review import Review
+from app.domain.pages import Page
+from app.domain.review import PageAssessment
 from app.domain.reviewer import BOSS
 from app.domain.service import (
-    ErrorEvent,
+    DoneEvent,
     Event,
     LLMError,
     MetaEvent,
-    ResultEvent,
-    review_deck,
+    PageErrorEvent,
+    PageEvent,
+    review_document,
 )
-from app.domain.slides import Slide
 
 GOOD_REPLY = json.dumps(
     {
-        "score": 85,
-        "summary": "結論が明確",
-        "good_points": ["1枚目に結論"],
-        "issues": [{"slide": 2, "severity": "中", "problem": "p", "why": "w", "fix": "f"}],
+        "content_score": 60,
+        "figure_score": None,
+        "chart_score": 80,
+        "good_points": ["グラフがある"],
+        "bad_points": ["結論がない"],
+        "fixes": ["タイトルを結論にする"],
     }
 )
 
 
 class FakeLLM:
-    """Returns a canned reply (or raises) and records what it was asked."""
+    """Replies per call from `replies` (an Exception is raised); records every call."""
 
-    def __init__(self, reply: str = GOOD_REPLY, error: Exception | None = None) -> None:
-        self.reply = reply
-        self.error = error
-        self.calls: list[tuple[str, str, dict[str, Any]]] = []
+    def __init__(self, *replies: str | Exception) -> None:
+        self.replies = list(replies)
+        self.calls: list[tuple[str, str, dict[str, Any], list[bytes]]] = []
 
-    async def complete(self, system: str, user: str, schema: dict[str, Any]) -> str:
-        self.calls.append((system, user, schema))
-        if self.error:
-            raise self.error
-        return self.reply
+    async def complete(
+        self, system: str, user: str, schema: dict[str, Any], images: Sequence[bytes] = ()
+    ) -> str:
+        self.calls.append((system, user, schema, list(images)))
+        reply = self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
 
 
-def _run(slides: list[Slide], llm: FakeLLM, max_slides: int = 40) -> list[Event]:
+def _pages(n: int) -> list[Page]:
+    return [
+        Page(no=i, title=f"t{i}", body="本文", char_sizes=(18.0,) * 10, image=b"img%d" % i)
+        for i in range(1, n + 1)
+    ]
+
+
+def _run(pages: list[Page], llm: FakeLLM, max_pages: int = 40) -> list[Event]:
     async def collect() -> list[Event]:
-        return [e async for e in review_deck(slides, llm, max_slides=max_slides)]
+        return [e async for e in review_document(pages, llm, max_pages=max_pages)]
 
     return asyncio.run(collect())
 
 
-DECK = [Slide(no=1, title="表紙", body="承認依頼"), Slide(no=2, title="結論", body="A案")]
+def test_event_sequence_is_meta_pages_done() -> None:
+    events = _run(_pages(2), FakeLLM(GOOD_REPLY))
+    assert [e.type for e in events] == ["meta", "page", "page", "done"]
 
 
-def test_meta_comes_first_with_lint_and_reviewer_profile() -> None:
-    events = _run([Slide(no=1, title="", body="ｱ")], FakeLLM())
-    meta = events[0]
+def test_meta_reports_counts_lint_reviewer_and_criteria() -> None:
+    pages = [Page(no=1, title="", body="ｱ")]
+    meta = _run(pages, FakeLLM(GOOD_REPLY))[0]
     assert isinstance(meta, MetaEvent)
-    assert meta.slide_count == 1
+    assert meta.page_count == 1
     assert not meta.truncated
     assert {f.rule for f in meta.lint} == {"半角カナ", "必須項目"}
     assert meta.reviewer == BOSS.profile
+    assert meta.criteria == ["内容", "フォントサイズ", "フォント", "図", "グラフ", "文字量"]
 
 
-def test_successful_review_ends_with_result_and_verdict() -> None:
-    events = _run(DECK, FakeLLM())
-    assert len(events) == 2
-    result = events[1]
-    assert isinstance(result, ResultEvent)
-    assert result.review.score == 85
-    assert result.verdict.passed
-    assert result.verdict.overall_passed
-
-
-def test_llm_receives_boss_prompt_deck_text_and_review_schema() -> None:
-    llm = FakeLLM()
-    _run(DECK, llm)
-    system, user, schema = llm.calls[0]
+def test_each_page_is_sent_with_its_image_prompt_and_schema() -> None:
+    llm = FakeLLM(GOOD_REPLY)
+    _run(_pages(2), llm)
+    system, user, schema, images = llm.calls[1]
     assert system == BOSS.system_prompt
-    assert "--- スライド2 ---" in user
-    assert schema == Review.model_json_schema()
+    assert "全2ページ中の2ページ目" in user
+    assert schema == PageAssessment.model_json_schema()
+    assert images == [b"img2"]
 
 
-def test_truncation_is_flagged_when_deck_exceeds_max_slides() -> None:
-    meta = _run(DECK, FakeLLM(), max_slides=1)[0]
+def test_page_without_image_is_sent_without_images() -> None:
+    llm = FakeLLM(GOOD_REPLY)
+    _run([Page(no=1, title="t", body="b")], llm)
+    assert llm.calls[0][3] == []
+
+
+def test_page_event_merges_llm_and_measured_scores() -> None:
+    page_event = _run(_pages(1), FakeLLM(GOOD_REPLY))[1]
+    assert isinstance(page_event, PageEvent)
+    scores = {s.criterion: s.score for s in page_event.result.scores}
+    assert scores == {
+        "内容": 60,
+        "フォントサイズ": 100,
+        "フォント": None,
+        "図": None,
+        "グラフ": 80,
+        "文字量": 100,
+    }
+    assert page_event.result.fixes == ["タイトルを結論にする"]
+
+
+def test_failing_page_is_reported_and_the_rest_continue() -> None:
+    events = _run(_pages(3), FakeLLM(GOOD_REPLY, LLMError("timeout"), '{"bad": 1}', GOOD_REPLY))
+    assert [e.type for e in events] == ["meta", "page", "page_error", "page_error", "done"]
+    llm_error, schema_error = events[2], events[3]
+    assert isinstance(llm_error, PageErrorEvent)
+    assert llm_error.no == 2
+    assert "timeout" in llm_error.message
+    assert isinstance(schema_error, PageErrorEvent)
+    assert "スキーマ" in schema_error.message
+    done = events[-1]
+    assert isinstance(done, DoneEvent)
+    assert done.summary.reviewed_pages == 1
+    assert done.summary.failed_pages == 2
+
+
+def test_only_max_pages_are_reviewed_and_truncation_is_flagged() -> None:
+    llm = FakeLLM(GOOD_REPLY)
+    events = _run(_pages(3), llm, max_pages=2)
+    meta = events[0]
     assert isinstance(meta, MetaEvent)
+    assert meta.page_count == 3
     assert meta.truncated
+    assert len(llm.calls) == 2
+    assert [e.type for e in events].count("page") == 2
 
 
-def test_llm_backend_failure_becomes_error_event() -> None:
-    events = _run(DECK, FakeLLM(error=LLMError("connection refused")))
-    assert isinstance(events[-1], ErrorEvent)
-    assert "connection refused" in events[-1].message
-
-
-def test_schema_invalid_reply_becomes_error_event() -> None:
-    events = _run(DECK, FakeLLM(reply='{"score": 500}'))
-    assert isinstance(events[-1], ErrorEvent)
-    assert "スキーマ" in events[-1].message
+def test_done_carries_verdict_with_lint() -> None:
+    done = _run(_pages(1), FakeLLM(GOOD_REPLY))[-1]
+    assert isinstance(done, DoneEvent)
+    assert done.summary.verdict is not None
+    assert done.summary.score == 85  # (60 + 100 + 80 + 100) / 4
+    assert done.summary.verdict.overall_passed

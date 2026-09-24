@@ -1,11 +1,11 @@
 """Unit tests for app.domain.precheck — LLM を使わない決定的ルールチェック。"""
 
 from app.domain.precheck import MAX_LINE_LEN, LintFinding, run_precheck
-from app.domain.slides import Slide
+from app.domain.pages import Page
 
 
-def _deck(*bodies: str, title: str = "表紙") -> list[Slide]:
-    return [Slide(no=i, title=title, body=b) for i, b in enumerate(bodies, start=1)]
+def _deck(*bodies: str, title: str = "表紙") -> list[Page]:
+    return [Page(no=i, title=title, body=b) for i, b in enumerate(bodies, start=1)]
 
 
 def test_clean_deck_has_no_findings() -> None:
@@ -23,7 +23,7 @@ def test_long_form_alone_is_not_a_variant_mix() -> None:
 
 
 def test_variant_in_title_is_also_checked() -> None:
-    slides = [Slide(no=1, title="ユーザー調査", body=""), Slide(no=2, title="t", body="ユーザ数")]
+    slides = [Page(no=1, title="ユーザー調査", body=""), Page(no=2, title="t", body="ユーザ数")]
     assert [f.rule for f in run_precheck(slides)] == ["表記ゆれ"]
 
 

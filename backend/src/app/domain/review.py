@@ -1,49 +1,92 @@
-"""Structured review output from the LLM and the pass/fail verdict.
+"""Scoring model: the six criteria, the LLM's per-page assessment, and aggregation.
 
-`Review.model_json_schema()` is passed to Ollama's `format` so the model is forced to
-emit JSON that validates against `Review`; the same model then validates the reply.
+内容・図・グラフは LLM(ページ画像 + テキスト)が採点し、フォントサイズ・フォント・文字量は
+`app.domain.metrics` が PDF から決定的に採点する。該当しない基準(図がないページの「図」など)は
+score=None とし、平均から除外する。
 """
 
+import base64
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.domain.pages import Page
 from app.domain.precheck import LintFinding
 
-
-class Issue(BaseModel):
-    """One actionable finding: where / what / why / how to fix."""
-
-    slide: int = Field(description="対象スライド番号。資料全体への指摘は0")
-    severity: Literal["高", "中", "低"]
-    problem: str = Field(description="何が問題か")
-    why: str = Field(description="なぜ問題か")
-    fix: str = Field(description="どう直すか(具体的に)")
+Criterion = Literal["内容", "フォントサイズ", "フォント", "図", "グラフ", "文字量"]
+CRITERIA: tuple[Criterion, ...] = ("内容", "フォントサイズ", "フォント", "図", "グラフ", "文字量")
 
 
-class Review(BaseModel):
-    """The reviewer's full critique of a deck."""
+class CriterionScore(BaseModel):
+    """Score (0-100) for one criterion; None when the criterion does not apply."""
 
-    score: int = Field(ge=0, le=100, description="この視点での資料の完成度(0-100)")
-    summary: str = Field(description="総評を2〜3文で")
-    good_points: list[str] = Field(description="良い点(最低1つ)")
-    issues: list[Issue]
+    criterion: Criterion
+    score: int | None
+    note: str = ""
+
+
+class PageAssessment(BaseModel):
+    """What the LLM returns for one page (passed to Ollama as the JSON schema)."""
+
+    content_score: int
+    figure_score: int | None
+    chart_score: int | None
+    good_points: list[str]
+    bad_points: list[str]
+    fixes: list[str]
+
+
+class PageResult(BaseModel):
+    """Review of one page: all six criteria in `CRITERIA` order plus comments.
+
+    `score` is the mean of the applicable criteria. `thumbnail` is the page JPEG,
+    base64-encoded (empty when the page has no image).
+    """
+
+    no: int
+    title: str
+    scores: list[CriterionScore]
+    score: int | None
+    good_points: list[str]
+    bad_points: list[str]
+    fixes: list[str]
+    thumbnail: str
+
+    @classmethod
+    def build(
+        cls, page: Page, assessment: PageAssessment, measured: list[CriterionScore]
+    ) -> "PageResult":
+        """Merge the LLM assessment with the measured criteria for `page`."""
+        raise NotImplementedError
 
 
 class Verdict(BaseModel):
-    """Outcome of judging a review.
-
-    `passed` reflects the reviewer alone; `overall_passed` additionally requires zero
-    rule-check findings.
-    """
+    """`passed`: overall score >= pass score. `overall_passed` also needs zero lint."""
 
     passed: bool
-    high_issues: int
     overall_passed: bool
 
 
-def judge(review: Review, lint: list[LintFinding], pass_score: int) -> Verdict:
-    """Pass when score >= pass_score and there is no 高 issue; overall also needs no lint."""
-    high = sum(1 for issue in review.issues if issue.severity == "高")
-    passed = review.score >= pass_score and high == 0
-    return Verdict(passed=passed, high_issues=high, overall_passed=passed and not lint)
+class Summary(BaseModel):
+    """Whole-document result: per-criterion averages over reviewed pages.
+
+    `verdict` is None when no page could be reviewed.
+    """
+
+    criteria: list[CriterionScore]
+    score: int | None
+    reviewed_pages: int
+    failed_pages: int
+    verdict: Verdict | None
+
+
+def summarize(
+    results: list[PageResult], failed_pages: int, lint: list[LintFinding], pass_score: int
+) -> Summary:
+    """Average each criterion over the pages where it applies, then judge."""
+    raise NotImplementedError
+
+
+def encode_thumbnail(image: bytes) -> str:
+    """Base64 text for embedding the page JPEG in JSON."""
+    return base64.b64encode(image).decode("ascii")
