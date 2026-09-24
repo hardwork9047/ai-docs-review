@@ -23,21 +23,25 @@ describe("healthLabel", () => {
 describe("verdictLabel", () => {
   it("passes overall", () => {
     const label = verdictLabel({ passed: true, high_issues: 0, overall_passed: true });
-    expect(label).toEqual({ text: "検印:提出OK", tone: "ok" });
+    expect(label).toEqual({ text: "検印:提出OK", tone: "ok", seal: "承認" });
   });
 
   it("asks to fix rule-check findings when only those remain", () => {
     const label = verdictLabel({ passed: true, high_issues: 0, overall_passed: false });
-    expect(label).toEqual({ text: "部長はOK — ルールチェックの指摘を直せば提出可", tone: "warn" });
+    expect(label).toEqual({
+      text: "部長はOK — ルールチェックの指摘を直せば提出可",
+      tone: "warn",
+      seal: "条件付",
+    });
   });
 
   it("mentions high issues when the reviewer rejects", () => {
     const label = verdictLabel({ passed: false, high_issues: 2, overall_passed: false });
-    expect(label).toEqual({ text: "差し戻し — 重要度「高」が2件", tone: "ng" });
+    expect(label).toEqual({ text: "差し戻し — 重要度「高」が2件", tone: "ng", seal: "差戻" });
   });
 
   it("falls back to score wording when there is no high issue", () => {
     const label = verdictLabel({ passed: false, high_issues: 0, overall_passed: false });
-    expect(label).toEqual({ text: "差し戻し — 合格点に届いていません", tone: "ng" });
+    expect(label).toEqual({ text: "差し戻し — 合格点に届いていません", tone: "ng", seal: "差戻" });
   });
 });

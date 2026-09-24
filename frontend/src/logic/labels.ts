@@ -21,8 +21,11 @@ export function healthLabel(health: Health | null): { text: string; tone: Tone }
   return { text: `Ollama 接続OK / ${health.model}`, tone: "ok" };
 }
 
-/** Headline verdict (検印). The reviewer's pass and the rule checks are shown separately. */
-export function verdictLabel(verdict: Verdict): { text: string; tone: Tone } {
+/**
+ * Headline verdict and the word on the 検印 seal.
+ * The reviewer's pass and the rule checks are distinguished (warn = only rule checks remain).
+ */
+export function verdictLabel(verdict: Verdict): { text: string; tone: Tone; seal: string } {
   if (verdict.overall_passed) return { text: "検印:提出OK", tone: "ok" };
   if (verdict.passed) {
     return { text: "部長はOK — ルールチェックの指摘を直せば提出可", tone: "warn" };
