@@ -16,6 +16,5 @@ export function escapeHtml(text: string): string {
  * No other Markdown is interpreted, so the result is safe to assign to innerHTML.
  */
 export function formatInline(text: string): string {
-  void text;
-  throw new Error("not implemented");
+  return escapeHtml(text).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
 }
