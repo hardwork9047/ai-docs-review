@@ -44,19 +44,54 @@ export const initialState: ReviewState = {
  * `end` (stream closed) while still reviewing means the result never arrived → error.
  */
 export function reduce(state: ReviewState, action: Action): ReviewState {
-  void state;
-  void action;
-  throw new Error("not implemented");
+  switch (action.kind) {
+    case "start":
+      return { ...initialState, phase: "reviewing", fileName: action.fileName };
+    case "event":
+      return applyEvent(state, action.event);
+    case "fail":
+      return { ...state, phase: "error", error: action.message };
+    case "end":
+      return state.phase === "reviewing"
+        ? { ...state, phase: "error", error: "レビュー結果を受け取る前に通信が途中で切れました" }
+        : state;
+    case "toggleIssue":
+      return { ...state, checkedIssues: toggle(state.checkedIssues, action.index) };
+    case "toggleLint":
+      return { ...state, checkedLint: toggle(state.checkedLint, action.index) };
+  }
+}
+
+function applyEvent(state: ReviewState, event: ReviewEvent): ReviewState {
+  switch (event.type) {
+    case "meta":
+      return { ...state, meta: event, checkedLint: event.lint.map(() => false) };
+    case "result":
+      return {
+        ...state,
+        phase: "done",
+        review: event.review,
+        verdict: event.verdict,
+        checkedIssues: event.review.issues.map(() => false),
+      };
+    case "error":
+      return { ...state, phase: "error", error: event.message };
+  }
+}
+
+function toggle(flags: boolean[], index: number): boolean[] {
+  return flags.map((flag, i) => (i === index ? !flag : flag));
 }
 
 /** Count review issues per severity. */
 export function severityCounts(review: Review): Record<Severity, number> {
-  void review;
-  throw new Error("not implemented");
+  const counts: Record<Severity, number> = { 高: 0, 中: 0, 低: 0 };
+  for (const issue of review.issues) counts[issue.severity] += 1;
+  return counts;
 }
 
 /** Number of issues and lint findings not yet ticked as handled. */
 export function remaining(state: ReviewState): { issues: number; lint: number } {
-  void state;
-  throw new Error("not implemented");
+  const unticked = (flags: boolean[]) => flags.filter((flag) => !flag).length;
+  return { issues: unticked(state.checkedIssues), lint: unticked(state.checkedLint) };
 }
