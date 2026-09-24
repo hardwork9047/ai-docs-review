@@ -6,10 +6,11 @@ map domain errors to HTTP status codes. No business logic here.
 
 from fastapi import APIRouter
 
-router = APIRouter()
+from app.infra.ollama import OllamaClient
+
+router = APIRouter(prefix="/api")
 
 
-@router.get("/health")
-def health() -> dict[str, str]:
-    """Liveness probe. Returns {"status": "ok"} when the app is up."""
-    return {"status": "ok"}
+def get_llm() -> OllamaClient:
+    """Dependency: the Ollama client built from settings (tests override this)."""
+    raise NotImplementedError
