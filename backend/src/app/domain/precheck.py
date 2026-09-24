@@ -4,6 +4,7 @@
 LLM には判断が要る批評だけを任せる。結果は毎回同じで説明可能。
 """
 
+import re
 from dataclasses import dataclass
 
 from app.domain.slides import Slide
@@ -34,4 +35,26 @@ def run_precheck(slides: list[Slide]) -> list[LintFinding]:
 
     Checks titles and bodies (not speaker notes). An empty list means the deck passes.
     """
-    raise NotImplementedError
+    findings: list[LintFinding] = []
+    full_text = "\n".join(f"{s.title}\n{s.body}" for s in slides)
+
+    for long_form, short_form in YURAGI_PAIRS:
+        # 短い表記は長い表記の部分文字列になりうるので、直後に「ー」が続くものは除外する
+        if long_form in full_text and re.search(rf"{re.escape(short_form)}(?!ー)", full_text):
+            findings.append(
+                LintFinding("表記ゆれ", f"「{long_form}」と「{short_form}」が混在しています")
+            )
+
+    if re.search(r"[ｦ-ﾟ]", full_text):
+        findings.append(LintFinding("半角カナ", "半角カタカナが含まれています(全角に統一推奨)"))
+
+    for slide in slides:
+        for line in slide.body.splitlines():
+            if len(line) > MAX_LINE_LEN:
+                detail = f"スライド{slide.no}: 1文が{len(line)}字(分割か箇条書き化を推奨)"
+                findings.append(LintFinding("長文", detail))
+
+    if slides and not slides[0].title:
+        findings.append(LintFinding("必須項目", "表紙のタイトルが空です"))
+
+    return findings
