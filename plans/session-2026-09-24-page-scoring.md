@@ -21,7 +21,7 @@
 - **イベント**: NDJSON `meta` → `page` | `page_error`(ページごと)→ `done`(基準別平均・判定)。1ページ失敗しても続行
 - **Ollama 呼び出し**: `stream: true` で受信して連結(Cloudflare Quick Tunnel の 100 秒制限を回避)、`images` にページ JPEG
 - **配信**: Render では 1 サービス(Docker: LibreOffice + Noto CJK)。FastAPI が `REVIEW_STATIC_DIR` のビルド済み frontend を同一オリジン配信。ローカル開発は従来どおり Vite proxy
-- **置き換え**: `domain/slides.py` → `domain/pages.py`、`infra/pptx_reader.py` → `infra/pdf_reader.py` + `infra/converter.py`。python-pptx は不要になるので削除
+- **置き換え**: `domain/slides.py` → `domain/pages.py`。画像・計測は `infra/pdf_reader.py`(+ `infra/converter.py`)、pptx のテキスト・書体は `infra/pptx_reader.py`(PDF の日本語が化けるため python-pptx は継続使用)
 - **テスト**: LibreOffice に依存するテストは偽 soffice スクリプトで配線のみ検証(CI に LibreOffice を入れない・skip しない)。PDF フィクスチャはテスト内で最小 PDF を生成
 
 ## 秘匿

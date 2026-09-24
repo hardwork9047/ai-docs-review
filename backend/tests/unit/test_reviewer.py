@@ -29,10 +29,29 @@ def test_prompt_lists_deck_outline_for_context() -> None:
 
 def test_prompt_includes_measurements_and_marks_unknown_ones() -> None:
     prompt = _prompt()
-    assert "- フォントサイズ: 58点(最小12pt / 14pt未満 60%)" in prompt
+    assert "- フォントサイズ: 最小12pt / 14pt未満 60%(判定: 要改善)" in prompt
     assert "- フォント: 計測不可" in prompt
-    assert "- 文字量: 40点(520字)" in prompt
+    assert "- 文字量: 520字(判定: 要改善)" in prompt
     assert "- 埋め込み画像: 2個" in prompt
+
+
+def test_measured_scores_are_not_shown_as_numbers() -> None:
+    # 小型モデルが「58点」を「58pt」と読み違えたため、点数は数値で渡さない
+    prompt = _prompt()
+    assert "58点" not in prompt
+    assert "40点" not in prompt
+
+
+def test_measurement_verdict_bands() -> None:
+    measured = [
+        CriterionScore(criterion="フォントサイズ", score=85, note="a"),
+        CriterionScore(criterion="フォント", score=70, note="b"),
+        CriterionScore(criterion="文字量", score=59, note="c"),
+    ]
+    prompt = build_page_prompt(PAGE, total=10, outline=[], measured=measured)
+    assert "- フォントサイズ: a(判定: 良好)" in prompt
+    assert "- フォント: b(判定: やや問題)" in prompt
+    assert "- 文字量: c(判定: 要改善)" in prompt
 
 
 def test_notes_are_included_only_when_present() -> None:
