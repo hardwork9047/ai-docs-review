@@ -42,10 +42,14 @@ class ReviewLLM(Protocol):
 
 
 class MetaEvent(BaseModel):
-    """First event: available immediately, before the LLM runs."""
+    """First event: available immediately, before the LLM runs.
+
+    `page_count` is the document's page count; `review_count` how many will be reviewed.
+    """
 
     type: Literal["meta"] = "meta"
     page_count: int
+    review_count: int
     truncated: bool
     lint: list[LintFinding]
     reviewer: ReviewerProfile
@@ -86,14 +90,15 @@ async def review_document(
     others, because the HTTP response is already streaming.
     """
     lint = run_precheck(pages)
+    targets = pages[:max_pages]
     yield MetaEvent(
         page_count=len(pages),
+        review_count=len(targets),
         truncated=len(pages) > max_pages,
         lint=lint,
         reviewer=reviewer.profile,
     )
 
-    targets = pages[:max_pages]
     outline = [p.title for p in targets]
     schema = PageAssessment.model_json_schema()
     results: list[PageResult] = []
