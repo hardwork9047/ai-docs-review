@@ -30,8 +30,42 @@ class OllamaClient:
 
     async def complete(self, system: str, user: str, schema: dict[str, Any]) -> str:
         """Return the model's JSON reply text. Raise `LLMError` on any backend failure."""
-        raise NotImplementedError
+        payload = {
+            "model": self._settings.model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "stream": False,
+            "format": schema,
+            "options": {
+                "temperature": self._settings.temperature,
+                "num_ctx": self._settings.num_ctx,
+            },
+        }
+        try:
+            async with self._client(self._settings.timeout_seconds) as client:
+                response = await client.post("/api/chat", json=payload)
+                response.raise_for_status()
+                return str(response.json()["message"]["content"])
+        except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
+            raise LLMError(str(exc) or type(exc).__name__) from exc
 
     async def health(self) -> OllamaHealth:
         """Check `/api/tags`. Never raises: failures are reported as `ok=False`."""
-        raise NotImplementedError
+        model = self._settings.model
+        try:
+            async with self._client(timeout=3.0) as client:
+                response = await client.get("/api/tags")
+                response.raise_for_status()
+                names = {m["name"] for m in response.json().get("models", [])}
+        except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
+            return OllamaHealth(ok=False, model=model, error=str(exc) or type(exc).__name__)
+        # タグ省略のモデル名は Ollama 上では ":latest" として登録される
+        ready = model in names or f"{model}:latest" in names
+        return OllamaHealth(ok=True, model=model, model_ready=ready)
+
+    def _client(self, timeout: float) -> httpx.AsyncClient:
+        return httpx.AsyncClient(
+            base_url=self._settings.ollama_url, timeout=timeout, transport=self._transport
+        )
