@@ -8,6 +8,8 @@ glyphs and substitutes fonts.
 
 from dataclasses import dataclass, replace
 
+GARBLED = "(cid:"  # pdfminer が Unicode 対応表の無いグリフを出力するときの表記
+
 
 @dataclass(frozen=True)
 class Page:
@@ -43,9 +45,17 @@ def apply_slide_text(pages: list[Page], slides: list[SlideText]) -> list[Page]:
 
     Pages and slides are matched by position; pages without a matching slide are
     returned unchanged. Measured values (`char_sizes`, `image`, ...) are kept.
+    A slide without a title placeholder keeps the rendered page's title (its largest
+    text) unless that text is garbled ("(cid:N)" glyphs without a Unicode map).
     """
     merged = [
-        replace(page, title=s.title, body=s.body, notes=s.notes, fonts=s.fonts)
+        replace(
+            page,
+            title=s.title or ("" if GARBLED in page.title else page.title),
+            body=s.body,
+            notes=s.notes,
+            fonts=s.fonts,
+        )
         for page, s in zip(pages, slides, strict=False)
     ]
     return merged + pages[len(merged) :]
