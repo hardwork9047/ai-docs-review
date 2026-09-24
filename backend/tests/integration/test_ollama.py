@@ -19,12 +19,20 @@ def _client(handler: Handler) -> OllamaClient:
     return OllamaClient(SETTINGS, transport=httpx.MockTransport(handler))
 
 
-def test_complete_posts_chat_request_with_schema_and_returns_content() -> None:
+def _ndjson(*chunks: dict[str, object]) -> httpx.Response:
+    return httpx.Response(200, text="\n".join(json.dumps(c) for c in chunks) + "\n")
+
+
+def test_complete_streams_chat_and_joins_the_content_chunks() -> None:
     seen: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request)
-        return httpx.Response(200, json={"message": {"content": '{"score": 1}'}})
+        return _ndjson(
+            {"message": {"content": '{"score"'}, "done": False},
+            {"message": {"content": ": 1}"}, "done": False},
+            {"message": {"content": ""}, "done": True},
+        )
 
     reply = asyncio.run(_client(handler).complete("sys", "usr", {"type": "object"}))
 
@@ -32,22 +40,51 @@ def test_complete_posts_chat_request_with_schema_and_returns_content() -> None:
     assert str(seen[0].url) == "http://ollama.test/api/chat"
     body = json.loads(seen[0].content)
     assert body["model"] == "gemma4:e2b"
-    assert body["stream"] is False
+    assert body["stream"] is True
     assert body["format"] == {"type": "object"}
     assert body["messages"] == [
         {"role": "system", "content": "sys"},
         {"role": "user", "content": "usr"},
     ]
     assert body["options"] == {"temperature": 0.2, "num_ctx": 8192}
+    assert "think" not in body  # 既定はモデル任せ
+
+
+def test_images_are_attached_to_the_user_message_as_base64() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return _ndjson({"message": {"content": "{}"}, "done": True})
+
+    asyncio.run(_client(handler).complete("s", "u", {}, images=[b"\xff\xd8jpeg"]))
+    user = json.loads(seen[0].content)["messages"][1]
+    assert user["images"] == ["/9hqcGVn"]
+
+
+def test_think_setting_is_forwarded_when_configured() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return _ndjson({"message": {"content": "{}"}, "done": True})
+
+    client = OllamaClient(
+        Settings(ollama_url="http://ollama.test", think=False),
+        transport=httpx.MockTransport(handler),
+    )
+    asyncio.run(client.complete("s", "u", {}))
+    assert json.loads(seen[0].content)["think"] is False
 
 
 @pytest.mark.parametrize(
     "handler",
     [
         lambda r: httpx.Response(500, text="boom"),
-        lambda r: httpx.Response(200, json={"unexpected": True}),
+        lambda r: httpx.Response(200, text="not json\n"),
+        lambda r: _ndjson({"error": "model not found"}),
     ],
-    ids=["http-error", "malformed-body"],
+    ids=["http-error", "malformed-line", "error-chunk"],
 )
 def test_complete_wraps_backend_failures_in_llm_error(handler: Handler) -> None:
     with pytest.raises(LLMError):

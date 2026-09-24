@@ -1,30 +1,42 @@
 """Integration tests: hit the API boundary with a real test client and a fake LLM."""
 
-import io
 import json
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
+from pathlib import Path
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from pptx import Presentation
 
-from app.api.routes import get_llm
+from app.api.routes import get_llm, get_settings
 from app.domain.service import LLMError
 from app.infra.ollama import OllamaHealth
+from app.infra.settings import Settings
 from app.main import create_app
+from tests.pdf_factory import make_pdf
 
-REPLY = json.dumps({"score": 90, "summary": "s", "good_points": ["g"], "issues": []})
-PPTX_TYPE = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+REPLY = json.dumps(
+    {
+        "content_score": 90,
+        "figure_score": None,
+        "chart_score": None,
+        "good_points": ["g"],
+        "bad_points": ["b"],
+        "fixes": ["f"],
+    }
+)
+PDF = make_pdf([[("Approval", 32), ("Body text", 18)], [("Next", 24)]])
 
 
 class FakeLLM:
     """Stands in for OllamaClient: canned chat reply (or error) and canned health."""
 
-    def __init__(self, error: Exception | None = None) -> None:
-        self.error = error
+    def __init__(self) -> None:
+        self.error: Exception | None = None
 
-    async def complete(self, system: str, user: str, schema: dict[str, Any]) -> str:
+    async def complete(
+        self, system: str, user: str, schema: dict[str, Any], images: Sequence[bytes] = ()
+    ) -> str:
         if self.error:
             raise self.error
         return REPLY
@@ -42,21 +54,13 @@ def llm() -> FakeLLM:
 def client(llm: FakeLLM) -> Iterator[TestClient]:
     app = create_app()
     app.dependency_overrides[get_llm] = lambda: llm
+    app.dependency_overrides[get_settings] = lambda: Settings(max_upload_mb=1)
     with TestClient(app) as c:
         yield c
 
 
-def _pptx(*titles: str) -> bytes:
-    prs = Presentation()
-    for title in titles:
-        prs.slides.add_slide(prs.slide_layouts[1]).shapes.title.text = title
-    buf = io.BytesIO()
-    prs.save(buf)
-    return buf.getvalue()
-
-
-def _post(client: TestClient, data: bytes, name: str = "deck.pptx") -> Any:
-    return client.post("/api/review", files={"file": (name, data, PPTX_TYPE)})
+def _post(client: TestClient, data: bytes, name: str = "deck.pdf") -> Any:
+    return client.post("/api/review", files={"file": (name, data, "application/octet-stream")})
 
 
 def _lines(response: Any) -> list[dict[str, Any]]:
@@ -69,36 +73,43 @@ def test_health_reports_ollama_status(client: TestClient) -> None:
     assert response.json() == {"ok": True, "model": "fake:1", "model_ready": True, "error": None}
 
 
-def test_review_streams_meta_then_result_as_ndjson(client: TestClient) -> None:
-    response = _post(client, _pptx("承認依頼", "結論"))
+def test_review_streams_meta_pages_done_as_ndjson(client: TestClient) -> None:
+    response = _post(client, PDF)
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("application/x-ndjson")
-    meta, result = _lines(response)
-    assert meta["type"] == "meta"
-    assert meta["slide_count"] == 2
-    assert meta["reviewer"]["name"] == "上司(部長)"
+    events = _lines(response)
+    assert [e["type"] for e in events] == ["meta", "page", "page", "done"]
+    meta, first, _, done = events
+    assert meta["page_count"] == 2
     assert "system_prompt" not in meta["reviewer"]
-    assert result["type"] == "result"
-    assert result["review"]["score"] == 90
-    assert result["verdict"]["overall_passed"] is True
+    assert first["result"]["title"] == "Approval"
+    assert first["result"]["thumbnail"]
+    assert done["summary"]["verdict"]["passed"] is True
 
 
-def test_llm_failure_is_streamed_as_error_event(client: TestClient, llm: FakeLLM) -> None:
+def test_llm_failure_is_streamed_per_page(client: TestClient, llm: FakeLLM) -> None:
     llm.error = LLMError("down")
-    events = _lines(_post(client, _pptx("t")))
-    assert [e["type"] for e in events] == ["meta", "error"]
+    events = _lines(_post(client, PDF))
+    assert [e["type"] for e in events] == ["meta", "page_error", "page_error", "done"]
 
 
-def test_non_pptx_filename_is_400(client: TestClient) -> None:
-    response = _post(client, b"x", name="deck.pdf")
+@pytest.mark.parametrize("name", ["deck.ppt", "deck.docx", "deck.png"])
+def test_unsupported_file_type_is_400(client: TestClient, name: str) -> None:
+    response = _post(client, PDF, name=name)
     assert response.status_code == 400
+    assert "pptx" in response.json()["detail"]
 
 
-def test_corrupt_pptx_is_400(client: TestClient) -> None:
-    response = _post(client, b"not a pptx")
-    assert response.status_code == 400
+def test_corrupt_pdf_is_400(client: TestClient) -> None:
+    assert _post(client, b"%PDF-1.4 broken").status_code == 400
 
 
-def test_deck_without_slides_is_400(client: TestClient) -> None:
-    response = _post(client, _pptx())
-    assert response.status_code == 400
+def test_upload_over_the_size_limit_is_413(client: TestClient) -> None:
+    assert _post(client, b"%PDF" + b"0" * (1024 * 1024)).status_code == 413
+
+
+def test_built_frontend_is_served_when_static_dir_is_set(tmp_path: Path) -> None:
+    (tmp_path / "index.html").write_text("<title>app</title>")
+    with TestClient(create_app(static_dir=str(tmp_path))) as c:
+        assert "<title>app</title>" in c.get("/").text
+        assert c.get("/api/health").status_code == 200  # API は静的配信より優先

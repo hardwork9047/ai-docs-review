@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",
     "httpx>=0.28.1",
+    "pdfplumber>=0.11.10",
     "pydantic-settings>=2.15.0",
     "python-multipart>=0.0.32",
     "python-pptx>=1.0.2",
@@ -29,6 +30,7 @@ packages = ["src/app"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]  # tests/pdf_factory.py を `tests.pdf_factory` として import する
 # カバレッジ閾値は Makefile / CI 側で付与する(TDD の内側ループで
 # 単一テストファイルを回すときに閾値で落ちないようにするため)
 
