@@ -1,6 +1,7 @@
 """Integration tests for app.infra.document — 形式判定と pptx/PDF の読み込み経路。"""
 
 import io
+import zipfile
 
 import pytest
 from pptx import Presentation
@@ -55,15 +56,32 @@ def test_pdf_is_read_directly_without_conversion() -> None:
 
 def test_pptx_is_converted_and_text_comes_from_the_pptx() -> None:
     calls: list[str] = []
+    converted: list[bytes] = []
 
     def fake_convert(data: bytes, soffice: str) -> bytes:
         calls.append(soffice)
+        converted.append(data)
         return PDF
 
     pages = load_document(
         "deck.pptx", _pptx("承認依頼", "結論"), soffice="/opt/soffice", convert=fake_convert
     )
     assert calls == ["/opt/soffice"]
+    assert converted and b"ppt/theme/theme1.xml" in converted[0]
     assert [p.title for p in pages] == ["承認依頼", "結論"]  # pptx 由来
     assert pages[0].char_sizes  # 計測値は PDF 由来
     assert pages[0].image
+
+
+def test_pptx_theme_fonts_are_fixed_before_conversion() -> None:
+    """Regression: 空の a:ea のまま変換すると日本語が文字化けする(infra/pptx_fix)。"""
+    converted: list[bytes] = []
+
+    def fake_convert(data: bytes, soffice: str) -> bytes:
+        converted.append(data)
+        return PDF
+
+    load_document("deck.pptx", _pptx("t"), soffice="x", convert=fake_convert)
+    with zipfile.ZipFile(io.BytesIO(converted[0])) as z:
+        theme = z.read("ppt/theme/theme1.xml").decode()
+    assert '<a:ea typeface=""' not in theme
