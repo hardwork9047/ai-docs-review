@@ -71,6 +71,7 @@ def test_meta_reports_counts_lint_reviewer_and_criteria() -> None:
     meta = _run(pages, FakeLLM(GOOD_REPLY))[0]
     assert isinstance(meta, MetaEvent)
     assert meta.page_count == 1
+    assert meta.review_count == 1
     assert not meta.truncated
     assert {f.rule for f in meta.lint} == {"半角カナ", "必須項目"}
     assert meta.reviewer == BOSS.profile
@@ -129,6 +130,7 @@ def test_only_max_pages_are_reviewed_and_truncation_is_flagged() -> None:
     meta = events[0]
     assert isinstance(meta, MetaEvent)
     assert meta.page_count == 3
+    assert meta.review_count == 2
     assert meta.truncated
     assert len(llm.calls) == 2
     assert [e.type for e in events].count("page") == 2
