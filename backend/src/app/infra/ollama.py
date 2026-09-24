@@ -1,5 +1,8 @@
 """Ollama adapter implementing the domain `ReviewLLM` port over its HTTP API."""
 
+import base64
+import json
+from collections.abc import Sequence
 from typing import Any
 
 import httpx
@@ -28,26 +31,44 @@ class OllamaClient:
         self._settings = settings
         self._transport = transport
 
-    async def complete(self, system: str, user: str, schema: dict[str, Any]) -> str:
-        """Return the model's JSON reply text. Raise `LLMError` on any backend failure."""
-        payload = {
+    async def complete(
+        self, system: str, user: str, schema: dict[str, Any], images: Sequence[bytes] = ()
+    ) -> str:
+        """Return the model's JSON reply text. Raise `LLMError` on any backend failure.
+
+        The reply is received with `stream: true` and joined, so slow generations keep
+        the connection alive through proxies with idle timeouts (e.g. Cloudflare's 100 s).
+        """
+        user_message: dict[str, Any] = {"role": "user", "content": user}
+        if images:
+            user_message["images"] = [base64.b64encode(i).decode("ascii") for i in images]
+        payload: dict[str, Any] = {
             "model": self._settings.model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            "stream": False,
+            "messages": [{"role": "system", "content": system}, user_message],
+            "stream": True,
             "format": schema,
             "options": {
                 "temperature": self._settings.temperature,
                 "num_ctx": self._settings.num_ctx,
             },
         }
+        if self._settings.think is not None:
+            payload["think"] = self._settings.think
         try:
-            async with self._client(self._settings.timeout_seconds) as client:
-                response = await client.post("/api/chat", json=payload)
+            async with (
+                self._client(self._settings.timeout_seconds) as client,
+                client.stream("POST", "/api/chat", json=payload) as response,
+            ):
                 response.raise_for_status()
-                return str(response.json()["message"]["content"])
+                parts: list[str] = []
+                async for line in response.aiter_lines():
+                    if not line.strip():
+                        continue
+                    chunk = json.loads(line)
+                    if "error" in chunk:
+                        raise LLMError(str(chunk["error"]))
+                    parts.append(str(chunk.get("message", {}).get("content", "")))
+                return "".join(parts)
         except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
             raise LLMError(str(exc) or type(exc).__name__) from exc
 

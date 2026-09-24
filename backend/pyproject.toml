@@ -57,3 +57,6 @@ select = [
 strict = true
 mypy_path = "src"
 packages = ["app"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "tests"]

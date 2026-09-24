@@ -68,9 +68,7 @@ def test_explicit_and_theme_fonts_are_collected() -> None:
 
 def test_table_is_rendered_as_pipe_rows() -> None:
     slide = read_slide_texts(_deck())[1]
-    assert slide == SlideText(
-        title="", body="[表]\n項目 | 金額\n設備 | 500万円", fonts=slide.fonts
-    )
+    assert slide == SlideText(title="", body="[表]\n項目 | 金額\n設備 | 500万円", fonts=slide.fonts)
 
 
 def test_non_pptx_bytes_raise_document_error() -> None:
