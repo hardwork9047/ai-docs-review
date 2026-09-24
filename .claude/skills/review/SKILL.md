@@ -26,13 +26,13 @@ git log origin/main..HEAD --oneline
 
 1. **Read the plan file first.** Find it in `plans/issue-{N}-*.md` or `plans/session-*.md`. Understand intent before reading code.
 2. **Read the ticket.** Check that acceptance scenarios are addressed (`gh issue view {N}`).
-3. **Check TDD discipline.** In `git log`, a `test:` commit introducing the new tests must precede the implementation commits it covers. Tests and implementation squashed into one commit is a violation. Exemption: `frontend/src/scene/`, docs, config.
+3. **Check TDD discipline.** In `git log`, a `test:` commit introducing the new tests must precede the implementation commits it covers. Tests and implementation squashed into one commit is a violation. Exemption: `frontend/src/ui/`, docs, config.
 4. **Review the diff** against the plan. Does the code match what was planned?
 5. **Check tests.** Are acceptance scenarios covered? Run `make test-{scope}` if needed.
 6. **Check docstrings.** Will the next agent understand these interfaces?
 7. **Check dead code.** Did the change introduce or leave behind unreachable code?
 8. **Check rename completeness.** If any file, function, or symbol was renamed or moved, grep for the old name across the repo. Stale references in documentation, skill files, scripts, and comments are a common source of agent confusion on the next session.
-9. **Check code quality and style.** Confirm the gates ran clean (`make lint`, `make typecheck`). Spot-check things the linters can't catch — naming, function decomposition, comment quality, structural clarity, logic placed in the right layer (domain vs api, logic vs scene). Style issues already caught and fixed by the linters don't need re-flagging; style issues outside the linters' scope belong in **Should Fix**.
+9. **Check code quality and style.** Confirm the gates ran clean (`make lint`, `make typecheck`). Spot-check things the linters can't catch — naming, function decomposition, comment quality, structural clarity, logic placed in the right layer (domain vs api, logic vs ui). Style issues already caught and fixed by the linters don't need re-flagging; style issues outside the linters' scope belong in **Should Fix**.
 10. **Check version bump.** Does the semver bump (`backend/pyproject.toml` or `frontend/package.json`) match the nature of the change? Is root `CHANGELOG.md` updated?
 11. **Check issue hygiene.** Are related issues referenced? Is the PR description complete?
 

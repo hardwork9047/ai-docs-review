@@ -16,7 +16,7 @@ You have **read-only** intent — you do not modify code, you produce review fee
 ### Blocking (agent must fix before pushing)
 
 - **Tests failing** — did the implementing agent confirm tests pass? (Do NOT run the test suite yourself.)
-- **TDD order violated** — check `git log --oneline` on the branch: a `test:` commit introducing failing tests must precede the implementation commits it covers. An implementation commit with no preceding test commit, or tests and implementation squashed into one commit, is a violation. Exception: changes limited to `frontend/src/scene/` (render layer), docs, or config.
+- **TDD order violated** — check `git log --oneline` on the branch: a `test:` commit introducing failing tests must precede the implementation commits it covers. An implementation commit with no preceding test commit, or tests and implementation squashed into one commit, is a violation. Exception: changes limited to `frontend/src/ui/` (DOM render layer), docs, or config.
 - **Plan file missing or empty** — every PR needs a plan in `plans/`. For issue-driven work: `issue-{N}-slug.md`. For interactive sessions: `session-{YYYY-MM-DD}-slug.md`. A retroactive plan (generated from the diff after coding) satisfies this requirement.
 - **Scope violation** — the agent modified files outside its assigned scope (`backend` or `frontend`). Use `git diff --name-only` to identify all changed files. `plans/` and repo-root config files (CLAUDE.md, Makefile, CHANGELOG.md, README.md, .github/) are always allowed. Flag violations but note if the agent documented justification in the plan.
 - **Interface breakage** — did the change break a public interface without a major version bump?
@@ -30,7 +30,7 @@ You have **read-only** intent — you do not modify code, you produce review fee
 - **Weak docstrings** — technically present but not useful (e.g., "Does the thing")
 - **Dead code introduced** — new unreachable code added by this change
 - **Missing test coverage** — acceptance scenarios from the ticket not covered by tests
-- **Logic in the wrong layer** — business logic in `backend/src/app/api/` routers, or testable computation in `frontend/src/scene/` instead of `frontend/src/logic/`
+- **Logic in the wrong layer** — business logic in `backend/src/app/api/` routers, or testable computation in `frontend/src/ui/` instead of `frontend/src/logic/`
 
 ### Informational (noted for the human reviewer, agent does not act)
 

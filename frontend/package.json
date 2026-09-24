@@ -1,5 +1,5 @@
 {
-  "name": "frontend",
+  "name": "pptx-review-frontend",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -12,11 +12,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
-    "three": "^0.170.0"
-  },
   "devDependencies": {
-    "@types/three": "^0.170.0",
     "typescript": "^5.7.0",
     "vite": "^6.0.0",
     "vitest": "^3.0.0"
