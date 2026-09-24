@@ -23,4 +23,15 @@ def build_user_prompt(slides: list[Slide], max_slides: int) -> str:
     Only the first `max_slides` slides are included; the header still reports the
     full slide count so the model knows the deck was truncated.
     """
-    raise NotImplementedError
+    blocks = [_render(s) for s in slides[:max_slides]]
+    return (
+        f"以下は全{len(slides)}枚のパワーポイント資料から抽出したテキストです。\n"
+        f"あなたの役割の視点でレビューし、JSONで出力してください。\n\n" + "\n\n".join(blocks)
+    )
+
+
+def _render(slide: Slide) -> str:
+    block = f"--- スライド{slide.no} ---\n[タイトル] {slide.title or '(なし)'}\n{slide.body}"
+    if slide.notes:
+        block += f"\n[発表者ノート] {slide.notes}"
+    return block
