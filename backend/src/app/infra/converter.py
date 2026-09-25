@@ -27,6 +27,14 @@ def default_soffice() -> str:
     return MAC_SOFFICE if os.path.exists(MAC_SOFFICE) else "soffice"
 
 
+def soffice_available(soffice: str) -> bool:
+    """True when `soffice` resolves to an executable (on PATH or as a path).
+
+    Render の Python ランタイムなど LibreOffice の無い環境では False(pptx は受け付けない)。
+    """
+    raise NotImplementedError
+
+
 def pptx_to_pdf(data: bytes, soffice: str, timeout: float = 180.0) -> bytes:
     """Return the PDF bytes LibreOffice produces for the given .pptx bytes."""
     with tempfile.TemporaryDirectory() as tmp:

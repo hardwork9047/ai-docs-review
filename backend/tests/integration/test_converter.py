@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from app.infra import converter
-from app.infra.converter import ConversionError, default_soffice, pptx_to_pdf
+from app.infra.converter import ConversionError, default_soffice, pptx_to_pdf, soffice_available
 
 
 def _fake_soffice(tmp_path: Path, body: str) -> str:
@@ -70,3 +70,17 @@ def test_default_soffice_last_resort_is_plain_name(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(converter.shutil, "which", lambda name: None)
     monkeypatch.setattr(converter.os.path, "exists", lambda path: False)
     assert default_soffice() == "soffice"
+
+
+def test_soffice_available_for_an_executable_path(tmp_path: Path) -> None:
+    assert soffice_available(_fake_soffice(tmp_path, "pass"))
+
+
+def test_soffice_unavailable_for_missing_binary(tmp_path: Path) -> None:
+    assert not soffice_available(str(tmp_path / "nope"))
+    assert not soffice_available("definitely-not-a-command-xyz")
+
+
+def test_missing_binary_message_tells_the_user_to_upload_pdf(tmp_path: Path) -> None:
+    with pytest.raises(ConversionError, match="PDF に書き出して"):
+        pptx_to_pdf(b"PPTX", str(tmp_path / "nope"))

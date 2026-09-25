@@ -121,3 +121,18 @@ def test_app_rejects_oversized_uploads_before_parsing(llm: FakeLLM) -> None:
     with TestClient(app) as c:
         response = _post(c, b"%PDF" + b"0" * (2 * 1024 * 1024))
     assert response.status_code == 413
+
+
+def test_capabilities_list_pptx_only_when_libreoffice_is_available(tmp_path: Path) -> None:
+    app = create_app()
+    fake = tmp_path / "soffice"
+    fake.write_text("#!/bin/sh\n")
+    fake.chmod(0o755)
+
+    app.dependency_overrides[get_settings] = lambda: Settings(soffice_path=str(fake))
+    with TestClient(app) as c:
+        assert c.get("/api/capabilities").json() == {"formats": ["pdf", "pptx"]}
+
+    app.dependency_overrides[get_settings] = lambda: Settings(soffice_path=str(tmp_path / "no"))
+    with TestClient(app) as c:
+        assert c.get("/api/capabilities").json() == {"formats": ["pdf"]}
