@@ -19,7 +19,8 @@ def fill_theme_east_asian_fonts(data: bytes) -> bytes:
     """Copy each theme font scheme's Jpan typeface into its empty `<a:ea typeface="">`.
 
     Only `ppt/theme/*.xml` entries change; every other zip entry is copied as is.
-    Returns `data` unchanged when nothing needs fixing.
+    Returns `data` unchanged when nothing needs fixing or `data` is not a zip
+    (reading errors are left to the pptx reader, which reports them properly).
     """
     try:
         src = zipfile.ZipFile(io.BytesIO(data))

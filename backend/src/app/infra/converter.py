@@ -38,7 +38,11 @@ def soffice_available(soffice: str) -> bool:
 
 
 def pptx_to_pdf(data: bytes, soffice: str, timeout: float = 180.0) -> bytes:
-    """Return the PDF bytes LibreOffice produces for the given .pptx bytes."""
+    """Return the PDF bytes LibreOffice produces for the given .pptx bytes.
+
+    Raise `ConversionError` when `soffice` is missing, the conversion takes longer than
+    `timeout` seconds, or LibreOffice exits without writing a PDF.
+    """
     with tempfile.TemporaryDirectory() as tmp:
         workdir = Path(tmp)
         src = workdir / "input.pptx"

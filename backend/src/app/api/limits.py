@@ -13,6 +13,8 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 class UploadLimitMiddleware:
     """Reject requests to `paths` whose body exceeds `max_bytes` with HTTP 413.
 
+    `paths` are matched exactly (no prefix matching); other requests pass through.
+
     A declared `Content-Length` over the limit is rejected before any body is read.
     Bodies without a length (chunked) are counted as they arrive; once over the limit,
     reading stops, the app sees a client disconnect, and the response becomes 413.

@@ -40,7 +40,13 @@ def load_document(
     image_width: int = 1024,
     convert: Converter | None = None,
 ) -> list[Page]:
-    """Read the upload into pages. `convert` defaults to LibreOffice `pptx_to_pdf`."""
+    """Read the upload into pages. `convert` defaults to LibreOffice `pptx_to_pdf`.
+
+    pptx は変換前にテーマの東アジア書体を補う(`fill_theme_east_asian_fonts`)。
+    Raise `DocumentError` (or its subclass `ConversionError`) when the type is not
+    .pdf/.pptx, the file cannot be read, or conversion fails. May return an empty list
+    for a document with no pages.
+    """
     if detect_kind(filename, data) == "pdf":
         return read_pdf(data, image_width)
     slides = read_slide_texts(data)

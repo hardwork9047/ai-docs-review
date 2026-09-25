@@ -20,8 +20,9 @@ def create_app(static_dir: str | None = None, max_upload_mb: int | None = None) 
 
     Factory pattern so tests can construct a fresh app instance. When `static_dir`
     is given, the built frontend in it is served at "/" (API routes take precedence).
-    Upload bodies to /api/review over `max_upload_mb` (default: settings) are cut off
-    with 413 before they are parsed.
+    Request bodies to /api/review larger than `max_upload_mb` (default: settings) plus a
+    small multipart overhead margin are cut off with 413 before they are parsed; the
+    exact file-size limit is then enforced by the route.
     """
     limit_mb = max_upload_mb if max_upload_mb is not None else get_settings().max_upload_mb
     application = FastAPI(title="部長レビュー")
