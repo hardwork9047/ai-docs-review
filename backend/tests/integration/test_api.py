@@ -113,3 +113,11 @@ def test_built_frontend_is_served_when_static_dir_is_set(tmp_path: Path) -> None
     with TestClient(create_app(static_dir=str(tmp_path))) as c:
         assert "<title>app</title>" in c.get("/").text
         assert c.get("/api/health").status_code == 200  # API は静的配信より優先
+
+
+def test_app_rejects_oversized_uploads_before_parsing(llm: FakeLLM) -> None:
+    app = create_app(max_upload_mb=1)
+    app.dependency_overrides[get_llm] = lambda: llm
+    with TestClient(app) as c:
+        response = _post(c, b"%PDF" + b"0" * (2 * 1024 * 1024))
+    assert response.status_code == 413
