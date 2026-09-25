@@ -11,6 +11,10 @@ from pydantic import BaseModel
 from app.domain.service import LLMError
 from app.infra.settings import Settings
 
+# Cloudflare が「オリジンから 100 秒以内に応答が無い」ときに返すステータス
+CLOUDFLARE_TIMEOUT = 524
+GATEWAY_TIMEOUT_RETRIES = 1
+
 
 class OllamaHealth(BaseModel):
     """Reachability of Ollama and whether the configured model has been pulled."""
@@ -38,6 +42,8 @@ class OllamaClient:
 
         The reply is received with `stream: true` and joined, so slow generations keep
         the connection alive through proxies with idle timeouts (e.g. Cloudflare's 100 s).
+        A Cloudflare timeout (HTTP 524) is retried once: right after Colab starts, loading
+        the model can delay the first byte past 100 s, and the retry then finds it warm.
         """
         user_message: dict[str, Any] = {"role": "user", "content": user}
         if images:
@@ -54,23 +60,33 @@ class OllamaClient:
         }
         if self._settings.think is not None:
             payload["think"] = self._settings.think
-        try:
-            async with (
-                self._client(self._settings.timeout_seconds) as client,
-                client.stream("POST", "/api/chat", json=payload) as response,
-            ):
-                response.raise_for_status()
-                parts: list[str] = []
-                async for line in response.aiter_lines():
-                    if not line.strip():
-                        continue
-                    chunk = json.loads(line)
-                    if "error" in chunk:
-                        raise LLMError(str(chunk["error"]))
-                    parts.append(str(chunk.get("message", {}).get("content", "")))
-                return "".join(parts)
-        except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
-            raise LLMError(str(exc) or type(exc).__name__) from exc
+        for attempt in range(1 + GATEWAY_TIMEOUT_RETRIES):
+            try:
+                return await self._chat(payload)
+            except httpx.HTTPStatusError as exc:
+                retryable = exc.response.status_code == CLOUDFLARE_TIMEOUT
+                if retryable and attempt < GATEWAY_TIMEOUT_RETRIES:
+                    continue
+                raise LLMError(str(exc)) from exc
+            except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
+                raise LLMError(str(exc) or type(exc).__name__) from exc
+        raise AssertionError("unreachable")  # pragma: no cover - loop always returns/raises
+
+    async def _chat(self, payload: dict[str, Any]) -> str:
+        async with (
+            self._client(self._settings.timeout_seconds) as client,
+            client.stream("POST", "/api/chat", json=payload) as response,
+        ):
+            response.raise_for_status()
+            parts: list[str] = []
+            async for line in response.aiter_lines():
+                if not line.strip():
+                    continue
+                chunk = json.loads(line)
+                if "error" in chunk:
+                    raise LLMError(str(chunk["error"]))
+                parts.append(str(chunk.get("message", {}).get("content", "")))
+            return "".join(parts)
 
     async def health(self) -> OllamaHealth:
         """Check `/api/tags`. Never raises: failures are reported as `ok=False`."""

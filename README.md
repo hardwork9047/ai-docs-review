@@ -39,20 +39,37 @@ make serve   # frontend をビルドして :8000 の 1 プロセスで配信(Ren
 
 ## Google Colab の Ollama を使う
 
-Colab(GPU ランタイム)で Ollama を**全インターフェースで**起動し、Cloudflare Quick Tunnel で公開する。
-`OLLAMA_HOST=0.0.0.0` を付けないと、トンネル経由のリクエストは Host ヘッダ検査で 403 になる。
+Colab(**GPU ランタイム**)で Ollama を起動し、Cloudflare Quick Tunnel で公開する。セルを上から順に実行する。
 
 ```python
+# 1) Ollama を入れて起動する
 !curl -fsSL https://ollama.com/install.sh | sh
 import subprocess, os
-env = {**os.environ, "OLLAMA_HOST": "0.0.0.0:11434", "OLLAMA_ORIGINS": "*"}
+env = {
+    **os.environ,
+    "OLLAMA_HOST": "0.0.0.0:11434",   # 必須: 127.0.0.1 待ち受けだとトンネル経由は Host 検査で 403
+    "OLLAMA_ORIGINS": "*",
+    "OLLAMA_CONTEXT_LENGTH": "8192",  # アプリの REVIEW_NUM_CTX と揃える(違うと初回にモデルを読み直す)
+    "OLLAMA_KEEP_ALIVE": "-1",        # モデルをメモリに置いたままにする(既定は 5 分で解放)
+}
 subprocess.Popen(["ollama", "serve"], env=env, stdout=open("ollama.log", "w"), stderr=subprocess.STDOUT)
 !sleep 5 && ollama pull gemma4:e2b
-# cloudflared を入れて起動し、表示された https://xxxx.trycloudflare.com を控える
-!cloudflared tunnel --url http://localhost:11434
 ```
 
-控えた URL を `REVIEW_OLLAMA_URL` に設定する。Quick Tunnel の URL は起動のたびに変わる。
+```python
+# 2) 暖機: モデルを読み込んでおく(Colab 起動直後の初回は読み込みで 100 秒を超え、Cloudflare が 524 を返すことがある)
+!curl -s localhost:11434/api/chat -d '{"model":"gemma4:e2b","stream":false,"options":{"num_ctx":8192},"messages":[{"role":"user","content":"ok"}]}' > /dev/null && echo warmed
+```
+
+```python
+# 3) トンネルを張って URL を表示する
+!wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O cloudflared && chmod +x cloudflared
+!nohup ./cloudflared tunnel --url http://localhost:11434 > cloudflared.log 2>&1 &
+!sleep 8 && grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' cloudflared.log | head -1
+```
+
+表示された URL を、Render のダッシュボード(またはローカルの `.env`)の `REVIEW_OLLAMA_URL` に設定する。
+Quick Tunnel の URL は起動のたびに変わる。アプリ側も 524 は 1 回だけ自動で再試行するが、暖機しておくと確実。
 
 ## Render でホスティング(Docker なし)
 

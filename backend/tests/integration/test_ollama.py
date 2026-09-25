@@ -136,3 +136,38 @@ def test_health_reports_unreachable_ollama_without_raising() -> None:
 def test_settings_can_be_overridden_by_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("REVIEW_MODEL", "gemma3:4b")
     assert Settings().model == "gemma3:4b"
+
+
+def _flaky(*statuses: int) -> tuple[Handler, list[httpx.Request]]:
+    """Handler answering with `statuses` in order, then a successful stream."""
+    seen: list[httpx.Request] = []
+    queue = list(statuses)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if queue:
+            return httpx.Response(queue.pop(0), text="")
+        return _ndjson({"message": {"content": "{}"}, "done": True})
+
+    return handler, seen
+
+
+def test_cloudflare_timeout_is_retried_once() -> None:
+    # Colab 起動直後の初回はモデル読み込みで Cloudflare の 100 秒制限(524)を超えることがある
+    handler, seen = _flaky(524)
+    assert asyncio.run(_client(handler).complete("s", "u", {})) == "{}"
+    assert len(seen) == 2
+
+
+def test_second_cloudflare_timeout_is_reported() -> None:
+    handler, seen = _flaky(524, 524)
+    with pytest.raises(LLMError, match="524"):
+        asyncio.run(_client(handler).complete("s", "u", {}))
+    assert len(seen) == 2
+
+
+def test_other_server_errors_are_not_retried() -> None:
+    handler, seen = _flaky(500)
+    with pytest.raises(LLMError):
+        asyncio.run(_client(handler).complete("s", "u", {}))
+    assert len(seen) == 1
