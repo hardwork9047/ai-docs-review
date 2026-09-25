@@ -8,7 +8,7 @@
 import { escapeHtml as esc, formatInline } from "../logic/escape";
 import type { PageResult } from "../logic/events";
 import { parseEvent } from "../logic/events";
-import { ACCEPT, uploadKind } from "../logic/files";
+import { ACCEPT, ALL_FORMATS, acceptFor, rejectReason, type UploadKind } from "../logic/files";
 import { formatScore, type Health, healthLabel, scoreTone, verdictLabel } from "../logic/labels";
 import { markdownFileName, toMarkdown } from "../logic/markdown";
 import { splitLines } from "../logic/ndjson";
@@ -24,6 +24,8 @@ import {
 
 let state = initialState;
 let health: Health | null = null;
+/** このデプロイで受け付ける形式(/api/capabilities。LibreOffice の無い環境では pdf のみ) */
+let formats: readonly UploadKind[] = ALL_FORMATS;
 let root: HTMLElement;
 const renderedPages = new Set<number>();
 
@@ -47,7 +49,7 @@ export function mount(el: HTMLElement): void {
           <input type="file" accept="${ACCEPT}" />
           <span class="drop-icon">${ICON_UP}</span>
           <span><strong id="drop-title">資料をドロップ、またはクリックして選択</strong>
-          <span>対応形式<i class="chip">PPTX</i><i class="chip">PDF</i> ・ 最大50MB ・ 1ページ15秒前後</span></span>
+          <span>対応形式<span id="formats"><i class="chip">PPTX</i><i class="chip">PDF</i></span> ・ 最大50MB ・ 1ページ15秒前後</span></span>
         </label>
         <div id="notice"></div>
       </section>
@@ -80,6 +82,24 @@ export function mount(el: HTMLElement): void {
     .then((h) => (health = h))
     .catch(() => (health = null))
     .finally(renderLamp);
+  fetch("/api/capabilities")
+    .then((r) => r.json() as Promise<{ formats: UploadKind[] }>)
+    .then((c) => {
+      formats = c.formats;
+      renderFormats();
+    })
+    .catch(() => undefined);
+}
+
+function renderFormats(): void {
+  root.querySelector<HTMLInputElement>("#drop input")!.accept = acceptFor(formats);
+  root.querySelector("#formats")!.innerHTML = formats
+    .slice()
+    .sort()
+    .reverse()
+    .map((f) => `<i class="chip">${f.toUpperCase()}</i>`)
+    .join("");
+  render();
 }
 
 function dispatch(action: Action): void {
@@ -125,8 +145,9 @@ function onClick(e: Event): void {
 
 async function startReview(file: File): Promise<void> {
   if (state.phase === "reviewing") return;
-  if (!uploadKind(file.name)) {
-    dispatch({ kind: "fail", message: "アップロードできるのは .pptx と .pdf だけです" });
+  const reason = rejectReason(file.name, formats);
+  if (reason) {
+    dispatch({ kind: "fail", message: reason });
     return;
   }
   renderedPages.clear();
@@ -201,6 +222,9 @@ function noticeHtml(): string {
   if (state.error) return `<div class="notice error">${esc(state.error)}</div>`;
   if (state.meta?.truncated) {
     return `<div class="notice info">全${state.meta.page_count}ページ中、先頭${state.meta.review_count}ページを採点します。</div>`;
+  }
+  if (!formats.includes("pptx")) {
+    return `<div class="notice info">この環境では PDF のみ採点できます。pptx は PowerPoint で PDF に書き出してからアップロードしてください。</div>`;
   }
   return "";
 }
