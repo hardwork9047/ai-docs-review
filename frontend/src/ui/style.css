@@ -32,10 +32,10 @@ button {
   font: inherit;
 }
 
+/* 画面幅いっぱいに使い、左右は画面幅に応じた少しの余白だけ残す */
 .wrap {
-  max-width: 1120px;
   margin: 0 auto;
-  padding: 0 24px;
+  padding: 0 clamp(16px, 2.5vw, 40px);
 }
 
 /* ---------------------------------------------------------------- header */
@@ -524,7 +524,8 @@ button {
 
 .page {
   display: grid;
-  grid-template-columns: 340px 1fr;
+  /* 横幅が広いほどサムネイルも大きく(画像は 1024px 幅で生成) */
+  grid-template-columns: minmax(340px, 36%) 1fr;
   align-items: start;
   gap: 24px;
   scroll-margin-top: 80px;
