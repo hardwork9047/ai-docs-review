@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     num_ctx: int = 8192
     think: bool | None = None  # None = モデル既定。False で思考を止めて速くする
     timeout_seconds: float = 600.0
+    # 接続確認の待ち時間。Modal は停止中の GPU コンテナの起動に 80 秒ほどかかるので長めにする
+    health_timeout_seconds: float = 120.0
 
     max_pages: int = 40  # これを超えたページは採点しない
     max_upload_mb: int = 50

@@ -92,7 +92,7 @@ class OllamaClient:
         """Check `/api/tags`. Never raises: failures are reported as `ok=False`."""
         model = self._settings.model
         try:
-            async with self._client(timeout=3.0) as client:
+            async with self._client(timeout=self._settings.health_timeout_seconds) as client:
                 response = await client.get("/api/tags")
                 response.raise_for_status()
                 names = {m["name"] for m in response.json().get("models", [])}
