@@ -1,7 +1,7 @@
 # 部長レビュー(ai-docs-review)
 
 提出前の資料(**.pptx / .pdf**)を、**多忙な部長の視点**で 1 ページずつ採点する Web アプリ。
-LLM はローカルまたは Google Colab 上の Ollama(`gemma4:e2b`、vision 対応)を使う。
+LLM は Ollama(`gemma4:e2b`、vision 対応)を使う。本番は Modal の GPU、開発時はローカルや Colab でも動く。
 
 - **ページ別の採点**: 各ページに 6 基準のスコアと「良い点・悪い点・修正点」
   | 基準 | 採点者 | 方法 |
@@ -16,11 +16,79 @@ LLM はローカルまたは Google Colab 上の Ollama(`gemma4:e2b`、vision �
 - **Markdown ダウンロード**: 採点結果(修正点のチェック状態つき)を `.md` で保存
 - pptx は LibreOffice で PDF 化し、ページ画像・文字サイズは PDF から、テキスト・書体は pptx から読む
 
+## 現状の構成
+
+### 本番構成(2026-09 時点)
+
+```mermaid
+flowchart LR
+    U["ブラウザ"] -- "HTTPS<br/>.pdf アップロード" --> R["Render Web Service<br/>buchou-review(Free)<br/>FastAPI + ビルド済み画面"]
+    R -- "HTTPS + proxy auth<br/>/api/chat(stream)" --> M["Modal<br/>buchou-review-ollama<br/>Ollama + gemma4:e2b(T4)"]
+    M --- V[("Modal Volume<br/>モデル 7.2GB")]
+    G["GitHub main"] -- "push で自動デプロイ" --> R
+```
+
+| 構成要素 | 置き場所 | 役割 | 費用・停止 |
+|---|---|---|---|
+| 画面 + API | Render(Python ランタイム、Docker なし)。定義は `render.yaml` / `bin/render-build.sh` | アップロード受付、PDF の解析と計測、機械チェック、LLM 呼び出し、結果のストリーミング、画面の配信 | Free。無操作 15 分でスリープし、次のアクセスで約 1 分かけて起動 |
+| LLM(Ollama) | Modal(T4 GPU × 最大 1 台)。定義は `deploy/modal_ollama.py` | ページ画像とテキストから内容・図・グラフを採点し、良い点・悪い点・修正点を返す | 動いている間だけ課金(T4 は約 $0.59/時、Starter の無料枠は $30/月)。最後のリクエストから 5 分で停止 |
+| モデル | Modal Volume `buchou-review-ollama-models` | gemma4:e2b(7.2GB)を保存し、起動のたびにダウンロードしないようにする | 保存のみ |
+| ソース・CI | GitHub(`main`)と GitHub Actions | lint / typecheck / test(カバレッジ 80%)。main への push で Render が再デプロイ | 無料 |
+
+### 採点 1 回の流れ
+
+1. ブラウザが `GET /api/health` を呼び、Render が Modal の `/api/tags` に問い合わせる。Modal が停止中なら、ここで GPU コンテナが起動する(約 80〜100 秒)
+2. ブラウザが PDF を `POST /api/review` で送る。上限を超える本文は、解析前にミドルウェアで打ち切る(413)
+3. Render が PDF を読み、ページごとに文字サイズ・書体・文字数を計測して画像(JPEG)にする。機械チェック(表記ゆれ等)も行う
+4. `meta` イベント(ページ数・機械チェック)を先に返し、1 ページずつ Modal に画像 + テキストを送って採点する
+5. ページごとに `page` イベントを返す(起動後は 1 ページ 7〜9 秒、起動直後の 1 ページ目は約 1 分)
+6. 最後に `done` イベント(基準別平均・総合判定)を返す。画面は受け取った順に表示し、Markdown でダウンロードできる
+
+### 秘密情報の置き場所
+
+URL と認証情報は**リポジトリに書かない**(公開リポジトリのため)。
+
+| 値 | ローカル | Render |
+|---|---|---|
+| `REVIEW_OLLAMA_URL`(Modal の URL) | `.env`(git 管理外) | ダッシュボードの Environment(`render.yaml` では `sync: false`) |
+| `REVIEW_OLLAMA_HEADERS`(Modal の Proxy Auth Token) | `.env` | 同上 |
+| Modal のアカウント認証 | `~/.modal.toml`(`uvx modal token new`) | 不要 |
+
+### 運用
+
+| やりたいこと | 方法 |
+|---|---|
+| アプリを更新する | PR を main にマージする → Render が自動で再デプロイ(約 1 分) |
+| デプロイの成否を見る | GitHub の Deployments、または Render ダッシュボードの Events |
+| Modal 側(Ollama)を更新する | `make modal-deploy`(モデルを変えるときは先に `make modal-pull`) |
+| Modal が動いているか見る | `uvx modal container list` / `uvx modal app logs buchou-review-ollama` |
+| Proxy Auth Token を作り直す | Modal ダッシュボードで作成し、`.env` と Render の `REVIEW_OLLAMA_HEADERS` を書き換える |
+| ローカルで開発する | `make dev`(`.env` の設定で Modal などに接続) |
+
+### 既知の制約
+
+- **Render では PDF のみ採点できる**。Python ランタイムに LibreOffice が無いため、pptx は画面で「PDF に書き出してから」と案内する。
+  pptx を扱うのはローカル(`make dev`)か、同梱の `Dockerfile` を使う構成(未ビルド検証)
+- **アクセス制限が無い**。Render の URL を知っていれば誰でもアップロードでき、Modal の GPU 時間を消費する
+- **待ち時間**: Render と Modal がどちらも停止していると、最初の採点が始まるまで最大 2〜3 分かかる
+- **同時利用**: GPU は 1 台なので、同時に採点すると順番待ちになる
+- 開発用の代替として Google Colab + Cloudflare Quick Tunnel も使える(後述)。URL が起動のたびに変わり、Colab の利用規約にも注意が必要
+
+### 設計で判断したこと
+
+- **LLM に計測をさせない**: フォントサイズ・書体・文字量は PDF から数える(毎回同じ・説明可能)。小型モデルには判断が要る内容・図・グラフだけを任せる
+- **PDF に統一**: pptx も PDF にしてから画像と計測値を取る。LibreOffice の PDF は日本語テキストが化けることがあるため、pptx のテキストと書体は元ファイルから読む。
+  日本語テーマの書体設定(空の `a:ea`)が原因の文字化けは、変換前に補正している(`infra/pptx_fix.py`)
+- **pdfplumber(MIT)を採用**: PyMuPDF は AGPL のため、公開ホスティングでは避けた
+- **応答はストリーミング**: 画面にはページごとに結果を流し(NDJSON)、Ollama からも `stream: true` で受け取る。
+  Cloudflare(524)は 1 回だけ再試行する
+- **GPU を無駄に起こさない**: Render のヘルスチェックは Ollama を呼ばない `/api/live` を使う
+
 ## 必要なツール
 
 - [uv](https://docs.astral.sh/uv/)、[pnpm](https://pnpm.io/) + Node.js 22+(`corepack enable pnpm`)
 - [LibreOffice](https://www.libreoffice.org/)(pptx の PDF 変換。macOS: `brew install --cask libreoffice`)
-- [Ollama](https://ollama.com/) と `gemma4:e2b`(ローカル、または下記の Colab)
+- LLM の実行環境: [Modal](https://modal.com/) のアカウント(本番。下記「Modal で Ollama を動かす」)、またはローカルの [Ollama](https://ollama.com/) + `gemma4:e2b`
 - 開発ワークフロー用: [gh](https://cli.github.com/)、Claude Code
 
 ## ローカルで起動
@@ -31,11 +99,11 @@ make serve   # frontend をビルドして :8000 の 1 プロセスで配信(Ren
 ```
 
 どちらも Ctrl+C で全サーバが止まる。接続先などの設定はリポジトリ直下の `.env` に書く
-(`cp .env.example .env` して `REVIEW_OLLAMA_URL` に Colab のトンネル URL を入れる)。`.env` は git 管理外。
+(`cp .env.example .env` して `REVIEW_OLLAMA_URL` と `REVIEW_OLLAMA_HEADERS` を入れる)。`.env` は git 管理外。
 未設定なら `http://localhost:11434`。コマンド実行時の環境変数が `.env` より優先される。
 ポートは `BACKEND_PORT` / `FRONTEND_PORT` で変更できる。
 
-> トンネル URL は公開リポジトリにコミットしない。認証の無い Ollama を誰でも直接使えてしまうため。
+> URL や認証情報は公開リポジトリにコミットしない。
 
 ## Modal で Ollama を動かす(推奨)
 
@@ -60,7 +128,7 @@ REVIEW_OLLAMA_HEADERS={"Modal-Key": "wk-...", "Modal-Secret": "ws-..."}
 - 停止中に画面を開くと、接続ランプは起動が終わるまで「確認中」のまま(最大 `REVIEW_HEALTH_TIMEOUT_SECONDS`)
 - Render のヘルスチェックは Ollama を呼ばない `/api/live` を使う(GPU を定期的に起こさないため)
 
-## Google Colab の Ollama を使う
+## Google Colab の Ollama を使う(開発用の代替)
 
 Colab(**GPU ランタイム**)で Ollama を起動し、Cloudflare Quick Tunnel で公開する。セルを上から順に実行する。
 
@@ -107,15 +175,15 @@ Quick Tunnel の URL は起動のたびに変わる。アプリ側も 524 は 1 
 > 画面で「PowerPoint で PDF に書き出してからアップロード」と案内する(対応形式は `GET /api/capabilities`)。
 > pptx も採点したい場合は、同梱の `Dockerfile`(LibreOffice 入り)で Docker ランタイムを使う。
 
-> **公開時の注意**: Render の URL を知っていれば誰でもアップロードでき、Colab の GPU を消費する。
-> アップロードした資料は Render と Colab(Cloudflare 経由)に送られる。社外秘の資料を扱う場合は、
-> アクセス制限(Render の IP 制限や前段の認証)を検討すること。
+> **公開時の注意**: Render の URL を知っていれば誰でもアップロードでき、Modal の GPU 時間を消費する。
+> アップロードした資料は Render と Modal(Colab を使う場合は Colab と Cloudflare)に送られる。
+> 社外秘の資料を扱う場合は、アクセス制限(Render の IP 制限や前段の認証)を検討すること。
 
 ## 設定(環境変数)
 
 | 変数 | 既定値 | 用途 |
 |---|---|---|
-| `REVIEW_OLLAMA_URL` | `http://localhost:11434` | Ollama の URL(Colab のトンネル URL など) |
+| `REVIEW_OLLAMA_URL` | `http://localhost:11434` | Ollama の URL(Modal の URL など) |
 | `REVIEW_OLLAMA_HEADERS` | `{}` | Ollama に付けるヘッダー(JSON)。Modal の proxy auth に使う |
 | `REVIEW_HEALTH_TIMEOUT_SECONDS` | `120` | 接続確認の待ち時間(Modal のコールドスタートを待てる長さ) |
 | `REVIEW_MODEL` | `gemma4:e2b` | 使用モデル(vision 対応が必要) |
@@ -183,13 +251,14 @@ backend/src/app/
   domain/   pages(ページ・pptx テキスト重ね合わせ)/ metrics(計測で採点する3基準)
             review(6基準・LLM スキーマ・集計)/ reviewer(部長の定義・ページ用プロンプト)
             precheck(機械チェック)/ service(meta→page…→done のイベント生成)
-  infra/    document(形式判定・読み込み)/ converter(LibreOffice)/ pdf_reader / pptx_reader
-            ollama(stream + 画像)/ settings
-  api/      routes(/api/health, /api/review)
+  infra/    document(形式判定・読み込み)/ converter(LibreOffice)/ pptx_fix(日本語書体の補正)
+            pdf_reader / pptx_reader / ollama(stream + 画像 + ヘッダー)/ settings
+  api/      routes(/api/live, /api/health, /api/capabilities, /api/review)/ limits(アップロード上限)
 frontend/src/
   logic/    events / ndjson / state(reducer)/ labels / markdown / files / escape  ← vitest
   ui/       DOM 描画・イベント結線(テスト免除)
 deploy/modal_ollama.py   Modal で Ollama を動かす GPU サーバ
 render.yaml, bin/render-build.sh   Render 用(Docker なし)/ Dockerfile は任意の Docker 構成
+bin/dev.sh  ローカル起動(make dev / make serve)
 plans/      plan・workflow_state・findings
 ```
