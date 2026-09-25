@@ -16,8 +16,9 @@ export function uploadKind(fileName: string): UploadKind | null {
 
 /** `accept` attribute for the formats this deployment supports (pptx first). */
 export function acceptFor(formats: readonly UploadKind[]): string {
-  void formats;
-  throw new Error("not implemented");
+  return ALL_FORMATS.filter((f) => formats.includes(f))
+    .map((f) => `.${f}`)
+    .join(",");
 }
 
 /**
@@ -25,7 +26,10 @@ export function acceptFor(formats: readonly UploadKind[]): string {
  * pptx on a deployment without LibreOffice gets a hint to export to PDF first.
  */
 export function rejectReason(fileName: string, formats: readonly UploadKind[]): string | null {
-  void fileName;
-  void formats;
-  throw new Error("not implemented");
+  const kind = uploadKind(fileName);
+  if (kind && formats.includes(kind)) return null;
+  if (kind === "pptx") {
+    return "この環境では pptx を採点できません。PowerPoint で PDF に書き出してからアップロードしてください";
+  }
+  return `アップロードできるのは ${acceptFor(formats).split(",").join(" と ")} だけです`;
 }
