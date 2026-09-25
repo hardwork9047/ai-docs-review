@@ -104,5 +104,8 @@ class OllamaClient:
 
     def _client(self, timeout: float) -> httpx.AsyncClient:
         return httpx.AsyncClient(
-            base_url=self._settings.ollama_url, timeout=timeout, transport=self._transport
+            base_url=self._settings.ollama_url,
+            headers=self._settings.ollama_headers,
+            timeout=timeout,
+            transport=self._transport,
         )

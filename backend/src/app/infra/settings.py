@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="REVIEW_")
 
     ollama_url: str = "http://localhost:11434"
+    # 接続先が要求する追加ヘッダー。環境変数では JSON で渡す(秘密値なのでリポジトリに書かない)
+    # 例(Modal の proxy auth):
+    #   REVIEW_OLLAMA_HEADERS='{"Modal-Key": "wk-...", "Modal-Secret": "ws-..."}'
+    ollama_headers: dict[str, str] = {}
     model: str = "gemma4:e2b"
     temperature: float = 0.2  # 批評は再現性重視で低め
     num_ctx: int = 8192

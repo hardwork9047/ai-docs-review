@@ -33,6 +33,16 @@ def get_llm(settings: Annotated[Settings, Depends(get_settings)]) -> OllamaClien
     return OllamaClient(settings)
 
 
+@router.get("/live")
+def live() -> dict[str, str]:
+    """Liveness probe for the hosting platform. Never calls Ollama.
+
+    Render のヘルスチェックはこちらを使う。/api/health は Ollama に問い合わせるので、
+    Modal のような従量課金の GPU を定期的に起こしてしまう。
+    """
+    return {"status": "ok"}
+
+
 @router.get("/health")
 async def health(llm: Annotated[OllamaClient, Depends(get_llm)]) -> OllamaHealth:
     """Report whether Ollama is reachable and the configured model is pulled."""
