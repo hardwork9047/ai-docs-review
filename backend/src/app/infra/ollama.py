@@ -92,7 +92,7 @@ class OllamaClient:
         """Check `/api/tags`. Never raises: failures are reported as `ok=False`."""
         model = self._settings.model
         try:
-            async with self._client(timeout=3.0) as client:
+            async with self._client(timeout=self._settings.health_timeout_seconds) as client:
                 response = await client.get("/api/tags")
                 response.raise_for_status()
                 names = {m["name"] for m in response.json().get("models", [])}
@@ -104,5 +104,8 @@ class OllamaClient:
 
     def _client(self, timeout: float) -> httpx.AsyncClient:
         return httpx.AsyncClient(
-            base_url=self._settings.ollama_url, timeout=timeout, transport=self._transport
+            base_url=self._settings.ollama_url,
+            headers=self._settings.ollama_headers,
+            timeout=timeout,
+            transport=self._transport,
         )

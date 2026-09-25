@@ -1,6 +1,6 @@
 # Render Blueprint(Docker なし・Python ネイティブランタイム)。
 # リポジトリを Render に接続すると、この定義で Web サービスが作られる。
-# LLM は Google Colab 上の Ollama(gemma4:e2b)を Cloudflare トンネル経由で使う。
+# LLM は Modal(deploy/modal_ollama.py)または Google Colab 上の Ollama(gemma4:e2b)を使う。
 # この環境には LibreOffice が無いため PDF のみ採点できる(pptx は画面で PDF 化を案内する)。
 services:
   - type: web
@@ -9,7 +9,8 @@ services:
     plan: free
     buildCommand: bin/render-build.sh
     startCommand: cd backend && .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port $PORT
-    healthCheckPath: /api/health
+    # /api/health は Ollama に問い合わせるので使わない(Modal の GPU を定期的に起こしてしまう)
+    healthCheckPath: /api/live
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.11
@@ -19,10 +20,12 @@ services:
       # ビルド済み frontend(startCommand の cwd = backend からの相対パス)
       - key: REVIEW_STATIC_DIR
         value: ../frontend/dist
-      # Colab で `cloudflared tunnel --url http://localhost:11434` が出した URL。
-      # 公開リポジトリに載せないよう、値は Render のダッシュボードで入力する(sync: false)。
-      # Quick Tunnel の URL は Colab を再起動するたびに変わるので、そのつど更新する
+      # Modal なら `modal deploy` が表示した URL(固定)。Colab なら Cloudflare トンネルの URL(再起動で変わる)。
+      # 公開リポジトリに載せないよう、値は Render のダッシュボードで入力する(sync: false)
       - key: REVIEW_OLLAMA_URL
+        sync: false
+      # Modal の proxy auth を使う場合: {"Modal-Key": "wk-...", "Modal-Secret": "ws-..."}(秘密値。ダッシュボードで入力)
+      - key: REVIEW_OLLAMA_HEADERS
         sync: false
       - key: REVIEW_MODEL
         value: gemma4:e2b

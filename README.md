@@ -37,6 +37,29 @@ make serve   # frontend をビルドして :8000 の 1 プロセスで配信(Ren
 
 > トンネル URL は公開リポジトリにコミットしない。認証の無い Ollama を誰でも直接使えてしまうため。
 
+## Modal で Ollama を動かす(推奨)
+
+`deploy/modal_ollama.py` が Ollama + gemma4:e2b を Modal の T4 GPU で公開する。URL は固定、
+使われていない間は自動停止(最後のリクエストから 5 分)するので、Starter の無料枠($30/月、T4 で約 50 時間)に収まりやすい。
+
+```bash
+uvx modal token new     # 初回のみ: Modal にログイン(ブラウザが開く)
+make modal-pull         # 初回のみ: モデル(7.2GB)を Modal の Volume に保存(GPU 不使用)
+make modal-deploy       # 公開。https://<workspace>--buchou-review-ollama-ollama.modal.run が表示される
+```
+
+エンドポイントは **proxy auth** 付き(認証なしは 401)。Modal ダッシュボードの Settings → Proxy Auth Tokens で
+トークンを作り、アプリに次の 2 つを設定する(ローカルは `.env`、Render はダッシュボード。どちらもリポジトリに書かない)。
+
+```
+REVIEW_OLLAMA_URL=https://<workspace>--buchou-review-ollama-ollama.modal.run
+REVIEW_OLLAMA_HEADERS={"Modal-Key": "wk-...", "Modal-Secret": "ws-..."}
+```
+
+- 実測: 停止状態からの起動(コールドスタート)約 80 秒、起動後は 1 ページ 7〜9 秒
+- 停止中に画面を開くと、接続ランプは起動が終わるまで「確認中」のまま(最大 `REVIEW_HEALTH_TIMEOUT_SECONDS`)
+- Render のヘルスチェックは Ollama を呼ばない `/api/live` を使う(GPU を定期的に起こさないため)
+
 ## Google Colab の Ollama を使う
 
 Colab(**GPU ランタイム**)で Ollama を起動し、Cloudflare Quick Tunnel で公開する。セルを上から順に実行する。
@@ -76,8 +99,8 @@ Quick Tunnel の URL は起動のたびに変わる。アプリ側も 524 は 1 
 1. このリポジトリを Render に接続し、**New → Blueprint** で `render.yaml` から作成する
    - Python ネイティブランタイム。ビルドは `bin/render-build.sh`(uv で backend、Node を用意して frontend をビルド)
    - 起動は `cd backend && .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port $PORT`(画面と API を同一オリジンで配信)
-2. `REVIEW_OLLAMA_URL` に Colab のトンネル URL を**ダッシュボードで**入力する(`sync: false`。公開リポジトリに載せない)。
-   Colab を再起動して URL が変わったら更新する
+2. ダッシュボードで `REVIEW_OLLAMA_URL`(Modal の URL、または Colab のトンネル URL)と、Modal なら
+   `REVIEW_OLLAMA_HEADERS` を入力する(`sync: false`。公開リポジトリに載せない)
 3. プランは Free で動く(無操作 15 分でスリープし、次のアクセスで起動に 1 分程度かかる)
 
 > **Render 上では PDF のみ採点できる。** Python ランタイムには LibreOffice を入れられないため、pptx は
@@ -93,6 +116,8 @@ Quick Tunnel の URL は起動のたびに変わる。アプリ側も 524 は 1 
 | 変数 | 既定値 | 用途 |
 |---|---|---|
 | `REVIEW_OLLAMA_URL` | `http://localhost:11434` | Ollama の URL(Colab のトンネル URL など) |
+| `REVIEW_OLLAMA_HEADERS` | `{}` | Ollama に付けるヘッダー(JSON)。Modal の proxy auth に使う |
+| `REVIEW_HEALTH_TIMEOUT_SECONDS` | `120` | 接続確認の待ち時間(Modal のコールドスタートを待てる長さ) |
 | `REVIEW_MODEL` | `gemma4:e2b` | 使用モデル(vision 対応が必要) |
 | `REVIEW_THINK` | 未設定(モデル既定) | `false` で思考を止めて速くする |
 | `REVIEW_TEMPERATURE` / `REVIEW_NUM_CTX` | `0.2` / `8192` | 推論パラメータ |
@@ -105,7 +130,8 @@ Quick Tunnel の URL は起動のたびに変わる。アプリ側も 524 は 1 
 
 ## API
 
-- `GET /api/health` — `{ok, model, model_ready, error}`
+- `GET /api/live` — `{status: "ok"}`(生存確認。Ollama を呼ばない。Render のヘルスチェック用)
+- `GET /api/health` — `{ok, model, model_ready, error}`(Ollama の接続確認)
 - `GET /api/capabilities` — `{formats: ["pdf", "pptx"]}`(LibreOffice が無ければ `["pdf"]`)
 - `POST /api/review`(multipart `file`、.pptx / .pdf のみ)— NDJSON で
   `meta`(ページ数・機械チェック)→ `page` / `page_error`(1 ページずつ)→ `done`(基準別平均・判定)
@@ -163,6 +189,7 @@ backend/src/app/
 frontend/src/
   logic/    events / ndjson / state(reducer)/ labels / markdown / files / escape  ← vitest
   ui/       DOM 描画・イベント結線(テスト免除)
+deploy/modal_ollama.py   Modal で Ollama を動かす GPU サーバ
 render.yaml, bin/render-build.sh   Render 用(Docker なし)/ Dockerfile は任意の Docker 構成
 plans/      plan・workflow_state・findings
 ```
