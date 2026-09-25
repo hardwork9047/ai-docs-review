@@ -26,10 +26,12 @@ LLM はローカルまたは Google Colab 上の Ollama(`gemma4:e2b`、vision �
 ## ローカルで起動
 
 ```bash
-make setup
-REVIEW_OLLAMA_URL=http://localhost:11434 make dev-backend   # :8000(API)
-make dev-frontend                                          # :5173(画面。/api は backend へ proxy)
+make dev     # backend(:8000)+ 画面(:5173)を同時起動。依存が無ければ make setup も自動実行
+make serve   # frontend をビルドして :8000 の 1 プロセスで配信(Render と同じ構成)
 ```
+
+どちらも Ctrl+C で全サーバが止まる。接続先は既定で Colab のトンネル。ローカルの Ollama を使うなら
+`REVIEW_OLLAMA_URL=http://localhost:11434 make dev`。ポートは `BACKEND_PORT` / `FRONTEND_PORT` で変更できる。
 
 ## Google Colab の Ollama を使う
 

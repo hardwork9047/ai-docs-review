@@ -1,7 +1,7 @@
 # 統一エントリポイント。skills・CI・人間はすべてこの Makefile 経由でコマンドを実行する。
 # スタックを変更する場合はここを書き換えれば skills 側の修正は不要。
 
-.PHONY: setup test test-backend test-frontend lint format typecheck check dev-backend dev-frontend
+.PHONY: setup test test-backend test-frontend lint format typecheck check dev serve dev-backend dev-frontend
 
 ## セットアップ ---------------------------------------------------------------
 
@@ -34,6 +34,12 @@ typecheck:
 check: lint typecheck test ## push 前に必ず通すフルゲート
 
 ## 開発サーバ -----------------------------------------------------------------
+
+dev: ## backend + frontend を同時起動(画面 http://localhost:5173、Ctrl+C で両方停止)
+	bin/dev.sh dev
+
+serve: ## frontend をビルドして FastAPI 1 プロセスで配信(Render と同じ構成、http://localhost:8000)
+	bin/dev.sh serve
 
 dev-backend:
 	cd backend && uv run uvicorn app.main:app --reload --port 8000
