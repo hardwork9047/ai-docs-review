@@ -33,3 +33,21 @@
 - Render を Docker なし(Python ランタイム)に変更: `render.yaml` / `bin/render-build.sh`。
   LibreOffice が無い環境では `GET /api/capabilities` が `["pdf"]` を返し、画面は PDF のみ受け付けて pptx は PDF 化を案内
 - ローカル起動スクリプト `bin/dev.sh`(`make dev` / `make serve`)
+
+## Round 2
+
+### Code Reviewer
+- Blocking: 0
+- Should Fix: 3
+- Informational: 6
+- Key Issues:
+  - Round 1 の Blocking(トンネル URL)解消を確認: `origin/main..HEAD` の差分・追跡ファイルとも実 URL なし(プレースホルダー `xxxx` のみ)。
+    rebase 用に残したローカル `backup/before-url-drop` に URL が残る → 削除
+  - [Should Fix] CHANGELOG が「Render(Docker)」のまま → Docker なし構成の記述に修正
+  - [Should Fix] plan の配信方針が Docker のまま → Python ランタイムへの変更と経緯を追記
+  - [Should Fix] Round 2 後の `make check` 記録なし → 実行: backend 133 passed(カバレッジ 98.23%)、frontend 70 passed、ruff / mypy / tsc クリーン
+- Judgment: 新規の問題なし。文書の整合性の指摘は妥当で、すべて対応済み
+
+### Doc Parrot
+- Divergences Found: 0(Round 1 で修正済み。Round 2 で追加した callable は Round 1 の parrot 対象に含まれていた)
+- Judgment: n/a
