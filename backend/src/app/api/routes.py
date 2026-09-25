@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
 from app.domain.service import review_document
-from app.infra.converter import default_soffice
+from app.infra.converter import default_soffice, soffice_available
 from app.infra.document import load_document
 from app.infra.errors import DocumentError
 from app.infra.ollama import OllamaClient, OllamaHealth
@@ -37,6 +37,13 @@ def get_llm(settings: Annotated[Settings, Depends(get_settings)]) -> OllamaClien
 async def health(llm: Annotated[OllamaClient, Depends(get_llm)]) -> OllamaHealth:
     """Report whether Ollama is reachable and the configured model is pulled."""
     return await llm.health()
+
+
+@router.get("/capabilities")
+def capabilities(settings: Annotated[Settings, Depends(get_settings)]) -> dict[str, list[str]]:
+    """Upload formats this deployment accepts: "pptx" only when LibreOffice is available."""
+    soffice = settings.soffice_path or default_soffice()
+    return {"formats": ["pdf", "pptx"] if soffice_available(soffice) else ["pdf"]}
 
 
 @router.post("/review")

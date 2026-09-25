@@ -32,7 +32,9 @@ def soffice_available(soffice: str) -> bool:
 
     Render の Python ランタイムなど LibreOffice の無い環境では False(pptx は受け付けない)。
     """
-    raise NotImplementedError
+    if os.sep in soffice:
+        return os.path.isfile(soffice) and os.access(soffice, os.X_OK)
+    return shutil.which(soffice) is not None
 
 
 def pptx_to_pdf(data: bytes, soffice: str, timeout: float = 180.0) -> bytes:
@@ -55,7 +57,10 @@ def pptx_to_pdf(data: bytes, soffice: str, timeout: float = 180.0) -> bytes:
         try:
             proc = subprocess.run(command, capture_output=True, timeout=timeout, check=False)
         except FileNotFoundError as exc:
-            raise ConversionError(f"LibreOffice が見つかりません: {soffice}") from exc
+            raise ConversionError(
+                "この環境には LibreOffice が無いため pptx を変換できません。"
+                "PowerPoint で PDF に書き出してからアップロードしてください"
+            ) from exc
         except subprocess.TimeoutExpired as exc:
             raise ConversionError(f"PDF 変換がタイムアウトしました({timeout:.0f}秒)") from exc
 
