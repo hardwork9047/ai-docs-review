@@ -171,3 +171,35 @@ def test_other_server_errors_are_not_retried() -> None:
     with pytest.raises(LLMError):
         asyncio.run(_client(handler).complete("s", "u", {}))
     assert len(seen) == 1
+
+
+def test_configured_headers_are_sent_on_chat_and_health() -> None:
+    # Modal の proxy auth(Modal-Key / Modal-Secret)など、接続先が要求する認証ヘッダー
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if request.url.path == "/api/tags":
+            return httpx.Response(200, json={"models": []})
+        return _ndjson({"message": {"content": "{}"}, "done": True})
+
+    settings = Settings(
+        ollama_url="http://ollama.test", ollama_headers={"Modal-Key": "k", "Modal-Secret": "s"}
+    )
+    client = OllamaClient(settings, transport=httpx.MockTransport(handler))
+    asyncio.run(client.complete("s", "u", {}))
+    asyncio.run(client.health())
+    assert [(r.headers.get("Modal-Key"), r.headers.get("Modal-Secret")) for r in seen] == [
+        ("k", "s"),
+        ("k", "s"),
+    ]
+
+
+def test_headers_can_be_given_as_json_in_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("REVIEW_OLLAMA_HEADERS", '{"Modal-Key": "k", "Modal-Secret": "s"}')
+    assert Settings().ollama_headers == {"Modal-Key": "k", "Modal-Secret": "s"}
+
+
+def test_no_extra_headers_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("REVIEW_OLLAMA_HEADERS", raising=False)
+    assert Settings().ollama_headers == {}

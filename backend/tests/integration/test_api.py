@@ -136,3 +136,17 @@ def test_capabilities_list_pptx_only_when_libreoffice_is_available(tmp_path: Pat
     app.dependency_overrides[get_settings] = lambda: Settings(soffice_path=str(tmp_path / "no"))
     with TestClient(app) as c:
         assert c.get("/api/capabilities").json() == {"formats": ["pdf"]}
+
+
+def test_liveness_does_not_touch_the_llm() -> None:
+    # Render のヘルスチェック用。Ollama(Modal の GPU)を起こさない
+    class ExplodingLLM(FakeLLM):
+        async def health(self) -> OllamaHealth:
+            raise AssertionError("liveness must not call Ollama")
+
+    app = create_app()
+    app.dependency_overrides[get_llm] = lambda: ExplodingLLM()
+    with TestClient(app) as c:
+        response = c.get("/api/live")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
