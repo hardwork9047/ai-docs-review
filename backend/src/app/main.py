@@ -8,16 +8,28 @@ built frontend from the same origin.
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from app.api.limits import UploadLimitMiddleware
 from app.api.routes import get_settings, router
 
+# multipart の境界・ヘッダ分の余裕。ファイル本体の厳密な上限はルート側で判定する
+MULTIPART_OVERHEAD_BYTES = 64 * 1024
 
-def create_app(static_dir: str | None = None) -> FastAPI:
+
+def create_app(static_dir: str | None = None, max_upload_mb: int | None = None) -> FastAPI:
     """Build and configure the FastAPI application.
 
     Factory pattern so tests can construct a fresh app instance. When `static_dir`
     is given, the built frontend in it is served at "/" (API routes take precedence).
+    Upload bodies to /api/review over `max_upload_mb` (default: settings) are cut off
+    with 413 before they are parsed.
     """
+    limit_mb = max_upload_mb if max_upload_mb is not None else get_settings().max_upload_mb
     application = FastAPI(title="部長レビュー")
+    application.add_middleware(
+        UploadLimitMiddleware,
+        max_bytes=limit_mb * 1024 * 1024 + MULTIPART_OVERHEAD_BYTES,
+        paths=("/api/review",),
+    )
     application.include_router(router)
     if static_dir:
         application.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
