@@ -1,4 +1,5 @@
-# Render(runtime: docker)用の 1 サービス構成。
+# 任意: Docker で動かす場合の 1 サービス構成(pptx も採点できる)。render.yaml は使わない。
+# Render では既定で Docker なしの Python ランタイム(render.yaml)を使う。
 # frontend をビルドして FastAPI から同一オリジンで配信し、pptx→PDF 変換に LibreOffice を使う。
 
 # ---- frontend build ----------------------------------------------------------

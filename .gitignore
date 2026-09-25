@@ -24,3 +24,6 @@ frontend/dist/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Render ネイティブビルドで取得するツール(bin/render-build.sh)
+.render/
