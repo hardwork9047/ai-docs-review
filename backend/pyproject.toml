@@ -1,6 +1,6 @@
 [project]
 name = "app"
-version = "0.2.0"
+version = "0.2.1"
 description = "PowerPoint review backend (local LLM, boss persona)"
 requires-python = ">=3.11"
 dependencies = [
