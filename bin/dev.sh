@@ -4,7 +4,9 @@
 #   bin/dev.sh          開発モード: backend(:8000, 自動リロード)+ Vite(:5173)を同時起動
 #   bin/dev.sh serve    本番同等:   frontend をビルドし、FastAPI 1 プロセス(:8000)で画面と API を配信
 #
-# 接続先 Ollama は REVIEW_OLLAMA_URL で上書きできる(未設定なら settings.py の既定 = Colab トンネル)。
+# 設定はリポジトリ直下の .env(git 管理外。雛形は .env.example)から読む。
+# Colab のトンネル URL はここに書く(公開リポジトリに載せないため、コードには既定値として持たない)。
+# コマンド実行時の環境変数が .env より優先される。
 #   例: REVIEW_OLLAMA_URL=http://localhost:11434 bin/dev.sh
 # Ctrl+C で起動したサーバをすべて止める。
 set -euo pipefail
@@ -15,6 +17,19 @@ BACKEND_PORT="${BACKEND_PORT:-8000}"
 FRONTEND_PORT="${FRONTEND_PORT:-5173}"
 
 cd "$ROOT"
+
+# .env を読み込む。すでに環境にある変数は上書きしない(コマンドラインの指定を優先)
+if [ -f .env ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in ''|'#'*) continue ;; esac
+        key="${line%%=*}"
+        if [ -z "${!key+x}" ]; then
+            export "$key=${line#*=}"
+        fi
+    done < .env
+    echo "→ .env を読み込みました"
+fi
+echo "→ Ollama: ${REVIEW_OLLAMA_URL:-http://localhost:11434(既定)}"
 
 for tool in uv pnpm; do
     if ! command -v "$tool" >/dev/null 2>&1; then

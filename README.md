@@ -30,8 +30,12 @@ make dev     # backend(:8000)+ 画面(:5173)を同時起動。依存が無けれ
 make serve   # frontend をビルドして :8000 の 1 プロセスで配信(Render と同じ構成)
 ```
 
-どちらも Ctrl+C で全サーバが止まる。接続先は既定で Colab のトンネル。ローカルの Ollama を使うなら
-`REVIEW_OLLAMA_URL=http://localhost:11434 make dev`。ポートは `BACKEND_PORT` / `FRONTEND_PORT` で変更できる。
+どちらも Ctrl+C で全サーバが止まる。接続先などの設定はリポジトリ直下の `.env` に書く
+(`cp .env.example .env` して `REVIEW_OLLAMA_URL` に Colab のトンネル URL を入れる)。`.env` は git 管理外。
+未設定なら `http://localhost:11434`。コマンド実行時の環境変数が `.env` より優先される。
+ポートは `BACKEND_PORT` / `FRONTEND_PORT` で変更できる。
+
+> トンネル URL は公開リポジトリにコミットしない。認証の無い Ollama を誰でも直接使えてしまうため。
 
 ## Google Colab の Ollama を使う
 
