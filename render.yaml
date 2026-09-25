@@ -13,6 +13,9 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.11
+      # pnpm 11 は Node.js 22.13 以上が必要(bin/render-build.sh も同じ既定値)
+      - key: NODE_VERSION
+        value: 24.20.0
       # ビルド済み frontend(startCommand の cwd = backend からの相対パス)
       - key: REVIEW_STATIC_DIR
         value: ../frontend/dist
