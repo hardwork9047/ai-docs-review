@@ -4,31 +4,77 @@ This layer only translates HTTP <-> domain: parse inputs, call domain functions,
 map domain errors to HTTP status codes. No business logic here.
 """
 
-from fastapi import APIRouter, HTTPException
+import asyncio
+from collections.abc import AsyncIterator
+from functools import lru_cache
+from typing import Annotated
 
-from app.domain.pagination import PageError, paginate
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 
-router = APIRouter()
+from app.domain.service import review_document
+from app.infra.converter import default_soffice, soffice_available
+from app.infra.document import load_document
+from app.infra.errors import DocumentError
+from app.infra.ollama import OllamaClient, OllamaHealth
+from app.infra.settings import Settings
 
-# サンプルデータ — 実開発では infra 層のデータソースに置き換える
-_SAMPLE_ITEMS = [f"item-{i}" for i in range(1, 24)]
+router = APIRouter(prefix="/api")
+
+
+@lru_cache
+def get_settings() -> Settings:
+    """Dependency: settings read once from the environment."""
+    return Settings()
+
+
+def get_llm(settings: Annotated[Settings, Depends(get_settings)]) -> OllamaClient:
+    """Dependency: the Ollama client built from settings (tests override this)."""
+    return OllamaClient(settings)
 
 
 @router.get("/health")
-def health() -> dict[str, str]:
-    """Liveness probe. Returns {"status": "ok"} when the app is up."""
-    return {"status": "ok"}
+async def health(llm: Annotated[OllamaClient, Depends(get_llm)]) -> OllamaHealth:
+    """Report whether Ollama is reachable and the configured model is pulled."""
+    return await llm.health()
 
 
-@router.get("/items")
-def list_items(page: int = 1, per_page: int = 10) -> dict[str, object]:
-    """Return one page of sample items.
+@router.get("/capabilities")
+def capabilities(settings: Annotated[Settings, Depends(get_settings)]) -> dict[str, list[str]]:
+    """Upload formats this deployment accepts: "pptx" only when LibreOffice is available."""
+    soffice = settings.soffice_path or default_soffice()
+    return {"formats": ["pdf", "pptx"] if soffice_available(soffice) else ["pdf"]}
 
-    Query params `page` (1-indexed) and `per_page` are validated by the domain
-    layer; out-of-range values yield HTTP 422.
+
+@router.post("/review")
+async def review(
+    file: Annotated[UploadFile, File()],
+    llm: Annotated[OllamaClient, Depends(get_llm)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> StreamingResponse:
+    """Review an uploaded .pptx / .pdf page by page and stream events as NDJSON.
+
+    413 when larger than `max_upload_mb`; 400 when the type is unsupported, the file
+    cannot be read or converted, or it has no pages.
     """
+    data = await file.read()
+    if len(data) > settings.max_upload_mb * 1024 * 1024:
+        raise HTTPException(413, f"ファイルは {settings.max_upload_mb}MB 以下にしてください")
     try:
-        result = paginate(_SAMPLE_ITEMS, page=page, per_page=per_page)
-    except PageError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return {"items": list(result.items), "page": result.page, "total_pages": result.total_pages}
+        pages = await asyncio.to_thread(
+            load_document,
+            file.filename or "",
+            data,
+            soffice=settings.soffice_path or default_soffice(),
+            image_width=settings.image_width,
+        )
+    except DocumentError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if not pages:
+        raise HTTPException(400, "ページがありません")
+
+    async def ndjson() -> AsyncIterator[str]:
+        async for event in review_document(pages, llm, max_pages=settings.max_pages):
+            yield event.model_dump_json() + "\n"
+
+    return StreamingResponse(ndjson(), media_type="application/x-ndjson")

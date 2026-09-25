@@ -1,0 +1,29 @@
+# Render Blueprint(Docker なし・Python ネイティブランタイム)。
+# リポジトリを Render に接続すると、この定義で Web サービスが作られる。
+# LLM は Google Colab 上の Ollama(gemma4:e2b)を Cloudflare トンネル経由で使う。
+# この環境には LibreOffice が無いため PDF のみ採点できる(pptx は画面で PDF 化を案内する)。
+services:
+  - type: web
+    name: buchou-review
+    runtime: python
+    plan: free
+    buildCommand: bin/render-build.sh
+    startCommand: cd backend && .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      # ビルド済み frontend(startCommand の cwd = backend からの相対パス)
+      - key: REVIEW_STATIC_DIR
+        value: ../frontend/dist
+      # Colab で `cloudflared tunnel --url http://localhost:11434` が出した URL。
+      # 公開リポジトリに載せないよう、値は Render のダッシュボードで入力する(sync: false)。
+      # Quick Tunnel の URL は Colab を再起動するたびに変わるので、そのつど更新する
+      - key: REVIEW_OLLAMA_URL
+        sync: false
+      - key: REVIEW_MODEL
+        value: gemma4:e2b
+      - key: REVIEW_MAX_PAGES
+        value: "40"
+      - key: REVIEW_MAX_UPLOAD_MB
+        value: "50"

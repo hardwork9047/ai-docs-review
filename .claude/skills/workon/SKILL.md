@@ -102,7 +102,7 @@ Do not commit this file yet — it will be committed (or cleaned up) when `/ship
 ## Operating Rules During Interactive Work
 
 - You are **scope-bound** per CLAUDE.md rules. Read the other scope freely, don't modify it without permission.
-- **TDD still applies** even in interactive mode: failing test first (`test:` commit), then implementation. The render layer (`frontend/src/scene/`) is the only exemption.
+- **TDD still applies** even in interactive mode: failing test first (`test:` commit), then implementation. The render layer (`frontend/src/ui/`) is the only exemption.
 - **No plan file is required yet.** A retroactive plan will be generated when the developer runs `/ship`.
 - Follow all quality gates: run tests iteratively, maintain docstrings, keep code clean.
 - When making architectural decisions or crossing scope boundaries, note them — they'll become PR annotations at ship time.

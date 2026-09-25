@@ -1,7 +1,9 @@
-import { startScene } from "./scene/scene";
+import "./ui/style.css";
 
-const canvas = document.querySelector<HTMLCanvasElement>("#app");
-if (!canvas) {
-  throw new Error("canvas #app not found");
+import { mount } from "./ui/app";
+
+const root = document.querySelector<HTMLElement>("#root");
+if (!root) {
+  throw new Error("#root not found");
 }
-startScene(canvas);
+mount(root);

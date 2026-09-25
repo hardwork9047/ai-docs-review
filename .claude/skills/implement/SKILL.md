@@ -159,7 +159,7 @@ step: 6 (implement)
 next: write code until tests pass; run fast quality checks iteratively
 ```
 
-Exception: changes limited to `frontend/src/scene/` (render layer) are exempt from test-first. If the issue requires scene work with embedded logic, extract the logic to `frontend/src/logic/` and TDD that.
+Exception: changes limited to `frontend/src/ui/` (DOM render layer) are exempt from test-first. If the issue requires ui work with embedded logic, extract the logic to `frontend/src/logic/` and TDD that.
 
 ### 6. Implement (Green)
 

@@ -12,7 +12,7 @@ Approach every UI task as a designer with a point of view, not a template-filler
 ## Ground choices in the subject
 
 Before writing any markup or CSS, answer:
-1. What is this screen concretely about? (this app: often a 3D scene plus controls/HUD around it)
+1. What is this screen concretely about? (this app: a single-page pptx review screen — upload, rule-check list, boss review card)
 2. Who uses it, in what context?
 3. What is the one primary action or piece of information?
 
