@@ -203,3 +203,25 @@ def test_headers_can_be_given_as_json_in_the_environment(monkeypatch: pytest.Mon
 def test_no_extra_headers_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("REVIEW_OLLAMA_HEADERS", raising=False)
     assert Settings().ollama_headers == {}
+
+
+def test_health_waits_long_enough_for_a_cold_start(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Modal はアクセスが無いと GPU コンテナを止め、次の起動に 80 秒ほどかかる。
+    # その間に接続ランプが「未接続」と誤表示されないよう、既定の待ち時間はそれより長くする
+    monkeypatch.delenv("REVIEW_HEALTH_TIMEOUT_SECONDS", raising=False)
+    assert Settings().health_timeout_seconds >= 120
+
+
+def test_health_uses_the_configured_timeout() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"models": []})
+
+    client = OllamaClient(
+        Settings(ollama_url="http://ollama.test", health_timeout_seconds=7.5),
+        transport=httpx.MockTransport(handler),
+    )
+    asyncio.run(client.health())
+    assert seen[0].extensions["timeout"]["read"] == 7.5
