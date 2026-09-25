@@ -54,12 +54,18 @@ subprocess.Popen(["ollama", "serve"], env=env, stdout=open("ollama.log", "w"), s
 
 控えた URL を `REVIEW_OLLAMA_URL` に設定する。Quick Tunnel の URL は起動のたびに変わる。
 
-## Render でホスティング
+## Render でホスティング(Docker なし)
 
-1. このリポジトリを Render に接続し、**Blueprint**(`render.yaml`)から作成する
-   - `Dockerfile` が frontend をビルドし、LibreOffice + 日本語フォント入りのイメージで FastAPI が画面と API を同一オリジンで配信する
-2. ダッシュボードの Environment で `REVIEW_OLLAMA_URL` に Colab のトンネル URL を設定する(Colab を再起動したら更新)
-3. プランは **Starter 以上**を推奨(LibreOffice の変換が CPU を使う。25 ページ・15MB の pptx で手元 Mac 約 40 秒)
+1. このリポジトリを Render に接続し、**New → Blueprint** で `render.yaml` から作成する
+   - Python ネイティブランタイム。ビルドは `bin/render-build.sh`(uv で backend、Node を用意して frontend をビルド)
+   - 起動は `cd backend && .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port $PORT`(画面と API を同一オリジンで配信)
+2. `REVIEW_OLLAMA_URL` に Colab のトンネル URL を**ダッシュボードで**入力する(`sync: false`。公開リポジトリに載せない)。
+   Colab を再起動して URL が変わったら更新する
+3. プランは Free で動く(無操作 15 分でスリープし、次のアクセスで起動に 1 分程度かかる)
+
+> **Render 上では PDF のみ採点できる。** Python ランタイムには LibreOffice を入れられないため、pptx は
+> 画面で「PowerPoint で PDF に書き出してからアップロード」と案内する(対応形式は `GET /api/capabilities`)。
+> pptx も採点したい場合は、同梱の `Dockerfile`(LibreOffice 入り)で Docker ランタイムを使う。
 
 > **公開時の注意**: Render の URL を知っていれば誰でもアップロードでき、Colab の GPU を消費する。
 > アップロードした資料は Render と Colab(Cloudflare 経由)に送られる。社外秘の資料を扱う場合は、
@@ -78,11 +84,12 @@ subprocess.Popen(["ollama", "serve"], env=env, stdout=open("ollama.log", "w"), s
 | `REVIEW_MAX_UPLOAD_MB` | `50` | アップロード上限 |
 | `REVIEW_IMAGE_WIDTH` | `1024` | LLM に渡すページ画像の幅(px) |
 | `REVIEW_SOFFICE_PATH` | 自動検出 | LibreOffice `soffice` のパス |
-| `REVIEW_STATIC_DIR` | 未設定 | ビルド済み frontend の配信元(Docker で設定済み) |
+| `REVIEW_STATIC_DIR` | 未設定 | ビルド済み frontend の配信元(render.yaml・Dockerfile で設定済み) |
 
 ## API
 
 - `GET /api/health` — `{ok, model, model_ready, error}`
+- `GET /api/capabilities` — `{formats: ["pdf", "pptx"]}`(LibreOffice が無ければ `["pdf"]`)
 - `POST /api/review`(multipart `file`、.pptx / .pdf のみ)— NDJSON で
   `meta`(ページ数・機械チェック)→ `page` / `page_error`(1 ページずつ)→ `done`(基準別平均・判定)
 
@@ -139,6 +146,6 @@ backend/src/app/
 frontend/src/
   logic/    events / ndjson / state(reducer)/ labels / markdown / files / escape  ← vitest
   ui/       DOM 描画・イベント結線(テスト免除)
-Dockerfile, render.yaml   Render 用
+render.yaml, bin/render-build.sh   Render 用(Docker なし)/ Dockerfile は任意の Docker 構成
 plans/      plan・workflow_state・findings
 ```

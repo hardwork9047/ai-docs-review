@@ -26,8 +26,9 @@ fi
 echo "→ node $(node -v)"
 
 echo "→ frontend ビルド"
-corepack enable --install-directory "$ROOT/.render/bin" 2>/dev/null \
-    || corepack enable
+# Render のランタイムはグローバルに書き込めないことがあるので、pnpm の shim はリポジトリ内に置く
+mkdir -p "$ROOT/.render/bin"
+corepack enable --install-directory "$ROOT/.render/bin"
 export PATH="$ROOT/.render/bin:$PATH"
 (cd frontend && pnpm install --frozen-lockfile && pnpm build)
 
