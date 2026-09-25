@@ -1,7 +1,7 @@
 # 統一エントリポイント。skills・CI・人間はすべてこの Makefile 経由でコマンドを実行する。
 # スタックを変更する場合はここを書き換えれば skills 側の修正は不要。
 
-.PHONY: setup test test-backend test-frontend lint format typecheck check dev serve dev-backend dev-frontend
+.PHONY: setup test test-backend test-frontend lint format typecheck check dev serve dev-backend dev-frontend modal-pull modal-deploy
 
 ## セットアップ ---------------------------------------------------------------
 
@@ -46,3 +46,11 @@ dev-backend:
 
 dev-frontend:
 	cd frontend && pnpm dev
+
+## Modal(Ollama の GPU サーバ)---------------------------------------------------
+
+modal-pull: ## 初回のみ: gemma4:e2b を Modal の Volume にダウンロード(GPU 不使用)
+	uvx modal run deploy/modal_ollama.py::pull
+
+modal-deploy: ## Ollama を Modal にデプロイ(表示された URL を REVIEW_OLLAMA_URL に設定)
+	uvx modal deploy deploy/modal_ollama.py
