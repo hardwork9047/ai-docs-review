@@ -144,3 +144,11 @@ def test_regex_patterns_only_when_enabled() -> None:
 def test_invalid_packs_are_rejected_with_a_reason(broken: object, reason: str) -> None:
     with pytest.raises(PackError, match=reason):
         parse_pack(broken)
+
+
+def test_spaces_and_line_breaks_inside_a_match_are_ignored() -> None:
+    # Regression: PDF のテキスト抽出は書体の切り替わりに空白を、折り返しに改行を入れる
+    # (「業界 No.1」「山田花子様 (85 歳 )」「必\nず改善」)。照合では空白・改行を無視する
+    findings = _check("効果は必\nず改善します", "料 金は別紙")
+    assert [(f.rule_id, f.page) for f in findings] == [("R-FORBID-01", 1)]
+    assert findings[0].detail == "効果を言い切らない(「必ず改善」)"
