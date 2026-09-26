@@ -44,6 +44,8 @@ class OllamaClient:
         the connection alive through proxies with idle timeouts (e.g. Cloudflare's 100 s).
         A Cloudflare timeout (HTTP 524) is retried once: right after Colab starts, loading
         the model can delay the first byte past 100 s, and the retry then finds it warm.
+        Redirects are followed, so Modal's 303 after its 150 s web timeout (cold start)
+        leads to the original streamed response.
         """
         user_message: dict[str, Any] = {"role": "user", "content": user}
         if images:
@@ -108,4 +110,6 @@ class OllamaClient:
             headers=self._settings.ollama_headers,
             timeout=timeout,
             transport=self._transport,
+            # Modal は 150 秒を超えたリクエストに 303(待ち受け用 URL)を返す。追えば元の応答が届く
+            follow_redirects=True,
         )
