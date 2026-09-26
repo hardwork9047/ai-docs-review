@@ -5,9 +5,10 @@
 LLM は使わない。
 """
 
+import re
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from app.domain.pages import Page
 from app.domain.precheck import LintFinding
@@ -52,7 +53,30 @@ def parse_pack(data: object) -> StandardPack:
     Checks: required fields and types, unique rule ids, non-empty patterns,
     compilable regexes, and `use` for `prefer` rules.
     """
-    raise NotImplementedError
+    if not isinstance(data, dict):
+        raise PackError("パックの形式が不正です(name / version / rules を持つ辞書にする)")
+    try:
+        pack = StandardPack.model_validate(data)
+    except ValidationError as exc:
+        fields = ", ".join(".".join(str(p) for p in e["loc"]) for e in exc.errors())
+        raise PackError(f"パックの項目が不正です: {fields}") from exc
+
+    seen: set[str] = set()
+    for rule in pack.rules:
+        if rule.id in seen:
+            raise PackError(f"ルール ID が重複しています: {rule.id}")
+        seen.add(rule.id)
+        if not rule.patterns or any(not p for p in rule.patterns):
+            raise PackError(f"{rule.id}: patterns が空です")
+        if rule.kind == "prefer" and not rule.use:
+            raise PackError(f"{rule.id}: prefer ルールには use(推奨表記)が必要です")
+        if rule.regex:
+            for pattern in rule.patterns:
+                try:
+                    re.compile(pattern)
+                except re.error as exc:
+                    raise PackError(f"{rule.id}: 正規表現が不正です: {pattern}") from exc
+    return pack
 
 
 def check_pack(pages: list[Page], pack: StandardPack) -> list[LintFinding]:
@@ -61,4 +85,44 @@ def check_pack(pages: list[Page], pack: StandardPack) -> list[LintFinding]:
     Page-level findings come first (page order, then rule order, one per matched text);
     document-level `required` findings follow with page 0.
     """
-    raise NotImplementedError
+    findings: list[LintFinding] = []
+    for page in pages:
+        text = f"{page.title}\n{page.body}"
+        for rule in pack.rules:
+            if rule.kind == "required":
+                continue
+            for hit in _matches(rule, text):
+                detail = (
+                    f"{rule.message}: 「{hit}」→「{rule.use}」"
+                    if rule.kind == "prefer"
+                    else f"{rule.message}(「{hit}」)"
+                )
+                findings.append(_finding(rule, detail, page.no))
+
+    whole = "\n".join(f"{p.title}\n{p.body}" for p in pages)
+    for rule in pack.rules:
+        if rule.kind == "required" and not _matches(rule, whole):
+            findings.append(_finding(rule, rule.message, 0))
+    return findings
+
+
+def _matches(rule: Rule, text: str) -> list[str]:
+    """Distinct matched strings in order of first appearance."""
+    hits: list[str] = []
+    for pattern in rule.patterns:
+        regex = pattern if rule.regex else re.escape(pattern)
+        for match in re.finditer(regex, text):
+            if match.group(0) and match.group(0) not in hits:
+                hits.append(match.group(0))
+    return hits
+
+
+def _finding(rule: Rule, detail: str, page: int) -> LintFinding:
+    return LintFinding(
+        rule=RULE_LABEL,
+        detail=detail,
+        rule_id=rule.id,
+        severity=rule.severity,
+        source=rule.source,
+        page=page,
+    )
