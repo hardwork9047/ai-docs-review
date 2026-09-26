@@ -24,10 +24,19 @@ MAX_LINE_LEN = 90  # 本文の1行がこれを超えたら「長文」
 
 @dataclass(frozen=True)
 class LintFinding:
-    """One rule-check finding. `rule` is the category label, `detail` the message."""
+    """One rule-check finding. `rule` is the category label, `detail` the message.
+
+    Findings from a company standard pack also carry `rule_id`, `severity` ("must" blocks
+    the formal pass, "should" is advisory), `source` (the guideline clause) and `page`
+    (1-indexed; 0 means the whole document). Built-in checks leave the defaults.
+    """
 
     rule: str
     detail: str
+    rule_id: str = ""
+    severity: str = "should"
+    source: str = ""
+    page: int = 0
 
 
 def run_precheck(pages: list[Page]) -> list[LintFinding]:
