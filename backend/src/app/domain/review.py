@@ -83,10 +83,15 @@ class PageResult(BaseModel):
 
 
 class Verdict(BaseModel):
-    """`passed`: overall score >= pass score. `overall_passed` also needs zero lint."""
+    """`passed`: overall score >= pass score. `overall_passed` also needs zero lint.
+
+    `formal_passed`: no "must" rule-check finding (company rules). Deterministic: it does
+    not depend on LLM scores, so the same document always gets the same value.
+    """
 
     passed: bool
     overall_passed: bool
+    formal_passed: bool = True
 
 
 class Summary(BaseModel):

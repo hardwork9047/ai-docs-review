@@ -22,6 +22,7 @@ from app.domain.review import (
     summarize,
 )
 from app.domain.reviewer import BOSS, Reviewer, ReviewerProfile, build_page_prompt
+from app.domain.standard import StandardPack
 
 
 class LLMError(Exception):
@@ -41,6 +42,13 @@ class ReviewLLM(Protocol):
         ...
 
 
+class StandardInfo(BaseModel):
+    """Which company standard pack (name and version) the rule checks used."""
+
+    name: str
+    version: str
+
+
 class MetaEvent(BaseModel):
     """First event: available immediately, before the LLM runs.
 
@@ -54,6 +62,7 @@ class MetaEvent(BaseModel):
     lint: list[LintFinding]
     reviewer: ReviewerProfile
     criteria: list[Criterion] = list(CRITERIA)
+    standard: StandardInfo | None = None
 
 
 class PageEvent(BaseModel):
@@ -82,12 +91,18 @@ Event = MetaEvent | PageEvent | PageErrorEvent | DoneEvent
 
 
 async def review_document(
-    pages: list[Page], llm: ReviewLLM, *, max_pages: int, reviewer: Reviewer = BOSS
+    pages: list[Page],
+    llm: ReviewLLM,
+    *,
+    max_pages: int,
+    reviewer: Reviewer = BOSS,
+    pack: StandardPack | None = None,
 ) -> AsyncIterator[Event]:
     """Yield `MetaEvent`, one `PageEvent`/`PageErrorEvent` per page, then `DoneEvent`.
 
     Only the first `max_pages` pages are reviewed. A failing page does not stop the
-    others, because the HTTP response is already streaming.
+    others, because the HTTP response is already streaming. With a `pack`, company-rule
+    findings are appended to the built-in rule checks and reported in `MetaEvent.lint`.
     """
     lint = run_precheck(pages)
     targets = pages[:max_pages]

@@ -115,3 +115,18 @@ def test_llm_schema_requires_every_field_and_allows_null_figure_and_chart() -> N
     figure_types = {branch["type"] for branch in schema["properties"]["figure_score"]["anyOf"]}
     assert figure_types == {"integer", "null"}
     assert schema["properties"]["content_score"]["maximum"] == 100
+
+
+def test_formal_verdict_ignores_should_findings_and_llm_scores() -> None:
+    should = LintFinding("会社ルール", "d", rule_id="R1", severity="should")
+    summary = summarize([_result(1, content=10)], 0, [should], pass_score=70)
+    assert summary.verdict is not None
+    assert summary.verdict.formal_passed
+    assert not summary.verdict.passed  # LLM の点は低いが、形式判定には影響しない
+
+
+def test_formal_verdict_fails_on_any_must_finding() -> None:
+    must = LintFinding("会社ルール", "d", rule_id="R1", severity="must")
+    summary = summarize([_result(1)], 0, [must], pass_score=70)
+    assert summary.verdict is not None
+    assert not summary.verdict.formal_passed
