@@ -97,3 +97,9 @@ def test_manufacturing_pack_catches_typical_mistakes() -> None:
         "R-DOC-01",
         "R-CONF-01",
     }
+
+
+def test_one_misspelling_gives_one_finding() -> None:
+    # Regression: 「段取替え」に「段取替え」「段取替」の両方が一致して 2 件になっていた
+    findings = _manufacturing_findings(*CLEAN_MANUFACTURING_DECK, "段取替えを短縮")
+    assert [rule for rule, _ in findings] == ["R-TERM-03"]

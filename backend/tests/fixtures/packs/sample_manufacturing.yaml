@@ -92,7 +92,7 @@ rules:
     message: 送り仮名を統一する
   - id: R-TERM-03
     kind: prefer
-    patterns: [段取替え, 段取替]
+    patterns: [段取替]  # 「段取替え」も含めて一致する
     use: 段取り替え
     severity: should
     source: 用語集 §2 表記の統一
