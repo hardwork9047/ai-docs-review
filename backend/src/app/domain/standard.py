@@ -14,6 +14,7 @@ from app.domain.pages import Page
 from app.domain.precheck import LintFinding
 
 RULE_LABEL = "会社ルール"
+_WHITESPACE = re.compile(r"\s+")
 
 
 class PackError(ValueError):
@@ -83,11 +84,13 @@ def check_pack(pages: list[Page], pack: StandardPack) -> list[LintFinding]:
     """Check page titles and bodies (not speaker notes) against the pack.
 
     Page-level findings come first (page order, then rule order, one per matched text);
-    document-level `required` findings follow with page 0.
+    document-level `required` findings follow with page 0. Whitespace and line breaks are
+    ignored when matching, because PDF text extraction inserts them at font changes and
+    line wraps (e.g. 「業界 No.1」, 「必\nず」).
     """
     findings: list[LintFinding] = []
     for page in pages:
-        text = f"{page.title}\n{page.body}"
+        text = _squash(f"{page.title}\n{page.body}")
         for rule in pack.rules:
             if rule.kind == "required":
                 continue
@@ -99,7 +102,7 @@ def check_pack(pages: list[Page], pack: StandardPack) -> list[LintFinding]:
                 )
                 findings.append(_finding(rule, detail, page.no))
 
-    whole = "\n".join(f"{p.title}\n{p.body}" for p in pages)
+    whole = _squash("".join(f"{p.title}{p.body}" for p in pages))
     for rule in pack.rules:
         if rule.kind == "required" and not _matches(rule, whole):
             findings.append(_finding(rule, rule.message, 0))
@@ -110,11 +113,16 @@ def _matches(rule: Rule, text: str) -> list[str]:
     """Distinct matched strings in order of first appearance."""
     hits: list[str] = []
     for pattern in rule.patterns:
-        regex = pattern if rule.regex else re.escape(pattern)
+        regex = pattern if rule.regex else re.escape(_squash(pattern))
         for match in re.finditer(regex, text):
             if match.group(0) and match.group(0) not in hits:
                 hits.append(match.group(0))
     return hits
+
+
+def _squash(text: str) -> str:
+    """Drop all whitespace (incl. full-width spaces and line breaks) before matching."""
+    return _WHITESPACE.sub("", text)
 
 
 def _finding(rule: Rule, detail: str, page: int) -> LintFinding:
