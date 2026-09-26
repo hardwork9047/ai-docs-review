@@ -103,7 +103,18 @@ rules:
 ```
 
 - サンプル(どちらも架空): `backend/tests/fixtures/packs/sample_care_sales.yaml`(介護向け提案書・10 ルール)、
-  `backend/tests/fixtures/packs/sample_manufacturing.yaml`(製造業の稟議・品質報告・改善提案・14 ルール)
+  `backend/tests/fixtures/packs/sample_manufacturing.yaml`(製造業の稟議・品質報告・改善提案・14 ルール + LLM への観点 9 件)
+- **LLM への会社の観点**(`review_guidelines`、任意): 内容・図・グラフの観点ごとに、部長(LLM)に確かめさせたい会社の指示を書く。
+  システムプロンプトに差し込まれ、採点と指摘(悪い点・修正点)に反映される。LLM の判断なので結果は参考扱いで、合否(formal_passed)には使わない。
+  小型モデルでも守れるよう、各観点5件・1件200字まで
+
+  ```yaml
+  review_guidelines:
+    content: [代替案と比較し、この案を選んだ理由を書いている]
+    figure:  [図の中の文字や数値が読める大きさになっている]
+    chart:   [軸の単位と、データの出典・期間が書いてある]
+  ```
+
 - 正規表現(`regex: true`)はパックの管理者が書く前提。`(a+)+` のような入れ子の量指定は、処理が極端に遅くなるので使わない
 - **顧客のパックはリポジトリに置かない**。Render では Secret File にして、そのパスを `REVIEW_STANDARD_PATH` に設定する
 - 使っているパックは `GET /api/standard` と画面・Markdown の「基準」に表示される

@@ -2,7 +2,8 @@
 
 from app.domain.pages import Page
 from app.domain.review import CriterionScore
-from app.domain.reviewer import BOSS, build_page_prompt
+from app.domain.reviewer import BOSS, build_page_prompt, build_system_prompt
+from app.domain.standard import StandardPack, parse_pack
 
 MEASURED = [
     CriterionScore(criterion="フォントサイズ", score=58, note="最小12pt / 14pt未満 60%"),
@@ -67,3 +68,27 @@ def test_missing_title_is_marked() -> None:
 def test_boss_prompt_defines_the_llm_scored_criteria() -> None:
     for key in ("content_score", "figure_score", "chart_score", "null"):
         assert key in BOSS.system_prompt
+
+
+def _pack(guidelines: dict[str, list[str]] | None = None) -> StandardPack:
+    data: dict[str, object] = {"name": "製造基準", "version": "2.1", "rules": []}
+    if guidelines is not None:
+        data["review_guidelines"] = guidelines
+    return parse_pack(data)
+
+
+def test_system_prompt_is_unchanged_without_pack_or_guidelines() -> None:
+    assert build_system_prompt(BOSS, None) == BOSS.system_prompt
+    assert build_system_prompt(BOSS, _pack()) == BOSS.system_prompt
+
+
+def test_system_prompt_lists_company_guidelines_by_criterion() -> None:
+    prompt = build_system_prompt(
+        BOSS, _pack({"content": ["代替案と比較している"], "chart": ["単位と出典がある"]})
+    )
+    assert prompt.startswith(BOSS.system_prompt)
+    assert "## 会社の観点(基準パック「製造基準」v2.1)" in prompt
+    assert "- 内容(content_score):\n  - 代替案と比較している" in prompt
+    assert "- グラフ(chart_score):\n  - 単位と出典がある" in prompt
+    assert "図(figure_score)" not in prompt  # 空の観点は出さない
+    assert "bad_points" in prompt.split("## 会社の観点")[1]

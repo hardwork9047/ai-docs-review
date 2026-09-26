@@ -193,3 +193,23 @@ def test_without_a_pack_there_is_no_standard_and_no_company_findings() -> None:
     assert isinstance(meta, MetaEvent)
     assert meta.standard is None
     assert all(f.rule != "会社ルール" for f in meta.lint)
+
+
+def test_llm_receives_the_pack_guidelines_in_the_system_prompt() -> None:
+    pack = parse_pack(
+        {
+            "name": "サンプル",
+            "version": "1.0",
+            "rules": [],
+            "review_guidelines": {"chart": ["単位と出典がある"]},
+        }
+    )
+    llm = FakeLLM(GOOD_REPLY)
+
+    async def collect() -> list[Event]:
+        return [e async for e in review_document(_pages(1), llm, max_pages=40, pack=pack)]
+
+    asyncio.run(collect())
+    system = llm.calls[0][0]
+    assert system.startswith(BOSS.system_prompt)
+    assert "単位と出典がある" in system

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- v0.4.0 (backend): 基準パックに review_guidelines(内容・図・グラフの会社の観点)を追加し、LLM のシステムプロンプトに反映。製造業サンプルパックに観点 9 件
 - docs: 製造業向けのサンプル基準パック(稟議・品質報告・改善提案の14ルール)を追加
 - v0.3.0 (backend, frontend): 基準パック(会社ルール)を追加。禁止表現・表記の統一・必須記載事項を YAML で定義し、根拠の条文付きで決定的に判定(formal_passed)。違反を20件仕込んだサンプル資料と正解表(make sample-deck)
 - v0.2.2 (backend): Modal(T4・proxy auth)で Ollama を動かす構成を追加。Ollama へのヘッダー設定、Render 用の生存確認 /api/live、接続確認の待ち時間を設定可能に
