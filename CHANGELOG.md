@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- docs: 製造業向けのサンプル基準パック(稟議・品質報告・改善提案の14ルール)を追加
 - v0.3.0 (backend, frontend): 基準パック(会社ルール)を追加。禁止表現・表記の統一・必須記載事項を YAML で定義し、根拠の条文付きで決定的に判定(formal_passed)。違反を20件仕込んだサンプル資料と正解表(make sample-deck)
 - v0.2.2 (backend): Modal(T4・proxy auth)で Ollama を動かす構成を追加。Ollama へのヘッダー設定、Render 用の生存確認 /api/live、接続確認の待ち時間を設定可能に
 - v0.2.1 (frontend): 表示幅を画面いっぱい(左右に少しの余白)に拡大し、ページのサムネイルも横幅に合わせて拡大

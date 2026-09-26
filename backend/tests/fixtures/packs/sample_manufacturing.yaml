@@ -1,0 +1,106 @@
+# 架空のサンプル基準パック(製造業の社内資料: 設備投資の稟議・品質報告・改善提案)。
+# 実在の会社のルールではない。source の規程名・条番号も架空。自社の規程に合わせて書き換えること。
+# 顧客のパックはリポジトリに置かないこと(Render では Secret File + REVIEW_STANDARD_PATH)。
+name: サンプル基準(製造業・社内稟議/報告)
+version: "1.0"
+rules:
+  # ── 必須記載事項(決裁者が判断に使う情報) ─────────────────────────
+  - id: R-REQ-01
+    kind: required
+    patterns: [目的|結論|依頼事項|承認いただきたい|決裁いただきたい]
+    regex: true
+    severity: must
+    source: 社内文書作成基準 §2.1 目的と依頼事項
+    message: 資料の目的・結論・依頼事項(何を判断してほしいか)を書く
+  - id: R-REQ-02
+    kind: required
+    patterns: [投資額|費用|予算|コスト]
+    regex: true
+    severity: must
+    source: 社内文書作成基準 §2.2 費用
+    message: 投資額・費用を書く
+  - id: R-REQ-03
+    kind: required
+    patterns: [削減額|効果額|回収期間|投資回収|ROI]
+    regex: true
+    severity: must
+    source: 社内文書作成基準 §2.3 効果の定量化
+    message: 効果を金額・回収期間などの数値で示す
+  - id: R-REQ-04
+    kind: required
+    patterns: [スケジュール|日程|納期|工程表|立上げ|立ち上げ]
+    regex: true
+    severity: must
+    source: 社内文書作成基準 §2.4 日程
+    message: 実施スケジュール(発注・立上げ・納期)を書く
+  - id: R-REQ-05
+    kind: required
+    patterns: [リスク|懸念|対策]
+    regex: true
+    severity: should
+    source: 社内文書作成基準 §2.5 リスクと対策
+    message: リスク・懸念事項とその対策を書く
+  - id: R-DOC-01
+    kind: required
+    patterns: ['作成日|改訂日|Rev\.?[0-9]|第[0-9]+版']
+    regex: true
+    severity: should
+    source: 文書管理規程 §3.1 版数・日付
+    message: 作成日・版数(Rev.)を書く
+  - id: R-CONF-01
+    kind: required
+    patterns: [社外秘|社内限|関係者限り|機密]
+    regex: true
+    severity: should
+    source: 情報セキュリティ規程 §4.2 機密区分の表示
+    message: 機密区分(社外秘・関係者限り等)を表示する
+
+  # ── 表現(判断を誤らせる書き方) ─────────────────────────────
+  - id: R-EXPR-01
+    kind: forbid
+    patterns: [必ず, 絶対, 100%, 確実に]
+    severity: must
+    source: 社内文書作成基準 §5.1 根拠のない断定の禁止
+    message: 効果や品質を断定しない(見込み値と前提条件を書く)
+  - id: R-VAGUE-01
+    kind: forbid
+    patterns: [大幅に, かなり, なるべく, できるだけ, 早急に, 適宜]
+    severity: should
+    source: 社内文書作成基準 §5.2 定量的な記述
+    message: 曖昧な表現を数値・期限に置き換える
+  - id: R-QUAL-01
+    kind: forbid
+    patterns: [作業者のミス, うっかり, 不注意, 気の緩み]
+    severity: should
+    source: 品質マニュアル §7.3 不具合の原因分析
+    message: 原因を個人の注意に帰さず、仕組み(なぜなぜ分析)で書く
+
+  # ── 表記の統一・誤字 ─────────────────────────────────────
+  - id: R-TERM-01
+    kind: prefer
+    patterns: [冶具]
+    use: 治具
+    severity: should
+    source: 用語集 §1 誤りやすい用語
+    message: 「冶具」は誤字
+  - id: R-TERM-02
+    kind: prefer
+    patterns: [歩留り]
+    use: 歩留まり
+    severity: should
+    source: 用語集 §2 表記の統一
+    message: 送り仮名を統一する
+  - id: R-TERM-03
+    kind: prefer
+    patterns: [段取替え, 段取替]
+    use: 段取り替え
+    severity: should
+    source: 用語集 §2 表記の統一
+    message: 送り仮名を統一する
+  - id: R-NUM-01
+    kind: forbid
+    patterns: ['[０-９]+']
+    regex: true
+    severity: should
+    source: 社内文書作成基準 §6.1 数字の表記
+    message: 数字は半角で書く
