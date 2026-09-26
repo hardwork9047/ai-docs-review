@@ -103,6 +103,7 @@ rules:
 ```
 
 - サンプル: `backend/tests/fixtures/packs/sample_care_sales.yaml`(架空。10 ルール)
+- 正規表現(`regex: true`)はパックの管理者が書く前提。`(a+)+` のような入れ子の量指定は、処理が極端に遅くなるので使わない
 - **顧客のパックはリポジトリに置かない**。Render では Secret File にして、そのパスを `REVIEW_STANDARD_PATH` に設定する
 - 使っているパックは `GET /api/standard` と画面・Markdown の「基準」に表示される
 
