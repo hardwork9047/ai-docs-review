@@ -1,6 +1,6 @@
 /** Display wording derived from backend data (kept out of ui/ so it is testable). */
 
-import type { Summary } from "./events";
+import type { LintFinding, Summary } from "./events";
 
 /** Shape of `GET /api/health` (mirror of backend `OllamaHealth`). */
 export interface Health {
@@ -43,4 +43,24 @@ export function scoreTone(score: number | null): ScoreTone {
 /** "82" or "–" when not applicable. */
 export function formatScore(score: number | null): string {
   return score === null ? "–" : String(score);
+}
+
+/**
+ * Display parts for one rule-check finding: a tag (種類と必須/推奨), where it is
+ * (ページ or 資料全体, empty for built-in checks without a page), and the cited clause.
+ */
+export function lintLabel(finding: LintFinding): {
+  tag: string;
+  place: string;
+  source: string;
+  must: boolean;
+} {
+  void finding;
+  throw new Error("not implemented");
+}
+
+/** "サンプル基準 v1.0", or null when no standard pack is configured. */
+export function standardLabel(standard: { name: string; version: string } | null | undefined): string | null {
+  void standard;
+  throw new Error("not implemented");
 }

@@ -28,6 +28,8 @@ export interface PageResult {
 export interface Verdict {
   passed: boolean;
   overall_passed: boolean;
+  /** must の会社ルール違反がゼロ(LLM の点に左右されない決定的な判定) */
+  formal_passed?: boolean;
 }
 
 export interface Summary {
@@ -41,6 +43,20 @@ export interface Summary {
 export interface LintFinding {
   rule: string;
   detail: string;
+  /** 会社ルール(基準パック)の指摘だけが持つ。組み込みの機械チェックは空文字・既定値 */
+  rule_id?: string;
+  /** "must" は形式判定を不合格にする。"should" は推奨 */
+  severity?: "must" | "should";
+  /** 根拠の条文(例: 提案書作成ガイドライン §4.2) */
+  source?: string;
+  /** 1 始まりのページ番号。0 は資料全体 */
+  page?: number;
+}
+
+/** 採点に使った基準パック */
+export interface StandardInfo {
+  name: string;
+  version: string;
 }
 
 export interface ReviewerProfile {
@@ -59,6 +75,7 @@ export interface MetaEvent {
   lint: LintFinding[];
   reviewer: ReviewerProfile;
   criteria: Criterion[];
+  standard?: StandardInfo | null;
 }
 
 export interface PageEvent {
