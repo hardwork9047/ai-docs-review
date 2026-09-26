@@ -22,7 +22,7 @@ from app.domain.review import (
     summarize,
 )
 from app.domain.reviewer import BOSS, Reviewer, ReviewerProfile, build_page_prompt
-from app.domain.standard import StandardPack
+from app.domain.standard import StandardPack, check_pack
 
 
 class LLMError(Exception):
@@ -104,7 +104,7 @@ async def review_document(
     others, because the HTTP response is already streaming. With a `pack`, company-rule
     findings are appended to the built-in rule checks and reported in `MetaEvent.lint`.
     """
-    lint = run_precheck(pages)
+    lint = run_precheck(pages) + (check_pack(pages, pack) if pack else [])
     targets = pages[:max_pages]
     yield MetaEvent(
         page_count=len(pages),
@@ -112,6 +112,7 @@ async def review_document(
         truncated=len(pages) > max_pages,
         lint=lint,
         reviewer=reviewer.profile,
+        standard=StandardInfo(name=pack.name, version=pack.version) if pack else None,
     )
 
     outline = [p.title for p in targets]

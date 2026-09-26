@@ -122,7 +122,11 @@ def summarize(
     verdict = None
     if score is not None:
         passed = score >= pass_score
-        verdict = Verdict(passed=passed, overall_passed=passed and not lint)
+        verdict = Verdict(
+            passed=passed,
+            overall_passed=passed and not lint,
+            formal_passed=not any(f.severity == "must" for f in lint),
+        )
     return Summary(
         criteria=criteria,
         score=score,

@@ -13,11 +13,13 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
 from app.domain.service import review_document
+from app.domain.standard import StandardPack
 from app.infra.converter import default_soffice, soffice_available
 from app.infra.document import load_document
 from app.infra.errors import DocumentError
 from app.infra.ollama import OllamaClient, OllamaHealth
 from app.infra.settings import Settings
+from app.infra.standards import load_pack
 
 router = APIRouter(prefix="/api")
 
@@ -31,6 +33,27 @@ def get_settings() -> Settings:
 def get_llm(settings: Annotated[Settings, Depends(get_settings)]) -> OllamaClient:
     """Dependency: the Ollama client built from settings (tests override this)."""
     return OllamaClient(settings)
+
+
+@lru_cache
+def _load_pack_cached(path: str) -> StandardPack:
+    return load_pack(path)
+
+
+def get_pack(settings: Annotated[Settings, Depends(get_settings)]) -> StandardPack | None:
+    """Dependency: the company standard pack from `standard_path`, or None if unset.
+
+    An invalid pack raises `PackError` (HTTP 500) rather than silently skipping rules.
+    """
+    return _load_pack_cached(settings.standard_path) if settings.standard_path else None
+
+
+@router.get("/standard")
+def standard(pack: Annotated[StandardPack | None, Depends(get_pack)]) -> dict[str, object] | None:
+    """Name, version and rule count of the configured pack (rule text is not exposed)."""
+    if pack is None:
+        return None
+    return {"name": pack.name, "version": pack.version, "rules": len(pack.rules)}
 
 
 @router.get("/live")
@@ -61,6 +84,7 @@ async def review(
     file: Annotated[UploadFile, File()],
     llm: Annotated[OllamaClient, Depends(get_llm)],
     settings: Annotated[Settings, Depends(get_settings)],
+    pack: Annotated[StandardPack | None, Depends(get_pack)],
 ) -> StreamingResponse:
     """Review an uploaded .pptx / .pdf page by page and stream events as NDJSON.
 
@@ -84,7 +108,7 @@ async def review(
         raise HTTPException(400, "ページがありません")
 
     async def ndjson() -> AsyncIterator[str]:
-        async for event in review_document(pages, llm, max_pages=settings.max_pages):
+        async for event in review_document(pages, llm, max_pages=settings.max_pages, pack=pack):
             yield event.model_dump_json() + "\n"
 
     return StreamingResponse(ndjson(), media_type="application/x-ndjson")
