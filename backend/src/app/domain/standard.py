@@ -8,7 +8,7 @@ LLM は使わない。
 import re
 from typing import Literal
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from app.domain.pages import Page
 from app.domain.precheck import LintFinding
@@ -43,12 +43,31 @@ class Rule(BaseModel):
     message: str
 
 
+MAX_GUIDELINES = 5  # 観点ごとの上限。小型モデルでも守れる量に抑える
+MAX_GUIDELINE_LEN = 200
+
+
+class ReviewGuidelines(BaseModel):
+    """Company-specific points the LLM should check, per LLM-scored criterion.
+
+    These steer the LLM's scoring and comments (内容・図・グラフ). Unlike `rules`, the
+    result is not deterministic, so it never affects the formal verdict.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    content: list[str] = []
+    figure: list[str] = []
+    chart: list[str] = []
+
+
 class StandardPack(BaseModel):
-    """A versioned set of company rules."""
+    """A versioned set of company rules, plus optional guidelines for the LLM review."""
 
     name: str
     version: str
     rules: list[Rule]
+    review_guidelines: ReviewGuidelines = ReviewGuidelines()
 
 
 def parse_pack(data: object) -> StandardPack:

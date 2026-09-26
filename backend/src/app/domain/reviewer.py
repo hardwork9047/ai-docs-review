@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from app.domain.pages import Page
 from app.domain.review import CriterionScore
+from app.domain.standard import StandardPack
 
 
 class ReviewerProfile(BaseModel):
@@ -93,3 +94,11 @@ def _band(score: int) -> str:
     if score >= 80:
         return "良好"
     return "やや問題" if score >= 60 else "要改善"
+
+
+def build_system_prompt(reviewer: Reviewer, pack: StandardPack | None) -> str:
+    """The reviewer's system prompt, extended with the pack's review guidelines.
+
+    Without a pack (or with no guidelines) this is exactly `reviewer.system_prompt`.
+    """
+    raise NotImplementedError

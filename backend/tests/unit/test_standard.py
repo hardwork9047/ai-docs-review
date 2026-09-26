@@ -173,3 +173,30 @@ def test_dot_in_a_regex_does_not_cross_a_boundary() -> None:
     )
     pages = [Page(no=1, title="t", body="料"), Page(no=2, title="金", body="x")]
     assert [f.rule_id for f in check_pack(pages, pack)] == ["R-REQ-01"]
+
+
+GUIDELINES = {
+    "content": ["代替案と比較している"],
+    "figure": ["図の文字が読める大きさ"],
+    "chart": ["単位と出典がある", "強調色は1色"],
+}
+
+
+def test_review_guidelines_are_optional_and_parsed() -> None:
+    assert parse_pack(PACK).review_guidelines.chart == []
+    pack = parse_pack({**PACK, "review_guidelines": GUIDELINES})
+    assert pack.review_guidelines.chart == ["単位と出典がある", "強調色は1色"]
+
+
+@pytest.mark.parametrize(
+    ("guidelines", "reason"),
+    [
+        ({"chart": [f"観点{i}" for i in range(6)]}, "5"),
+        ({"figure": ["あ" * 201]}, "200"),
+        ({"figure": [""]}, "空"),
+        ({"layout": ["x"]}, "review_guidelines"),
+    ],
+)
+def test_invalid_review_guidelines_are_rejected(guidelines: dict[str, Any], reason: str) -> None:
+    with pytest.raises(PackError, match=reason):
+        parse_pack({**PACK, "review_guidelines": guidelines})
