@@ -165,3 +165,11 @@ def test_required_item_is_not_satisfied_across_a_page_boundary() -> None:
 def test_matches_do_not_span_the_title_and_the_body() -> None:
     pages = [Page(no=1, title="効果は必", body="ず改善の料金")]
     assert check_pack(pages, parse_pack(PACK)) == []
+
+
+def test_dot_in_a_regex_does_not_cross_a_boundary() -> None:
+    pack = parse_pack(
+        {**PACK, "rules": [{**PACK["rules"][2], "patterns": ["料.金"], "regex": True}]}
+    )
+    pages = [Page(no=1, title="t", body="料"), Page(no=2, title="金", body="x")]
+    assert [f.rule_id for f in check_pack(pages, pack)] == ["R-REQ-01"]

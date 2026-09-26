@@ -15,6 +15,9 @@ from app.domain.precheck import LintFinding
 
 RULE_LABEL = "会社ルール"
 _WHITESPACE = re.compile(r"\s+")
+# 空白を詰めた後に、タイトル/本文・ページの境目として挟む文字。
+# 正規表現の `.` は既定で改行に一致しないので、`料金.{0,3}円` のような規則も境目をまたがない
+_BOUNDARY = "\n"
 
 
 class PackError(ValueError):
@@ -52,7 +55,8 @@ def parse_pack(data: object) -> StandardPack:
     """Validate a pack loaded from YAML/JSON. Raise `PackError` with a readable reason.
 
     Checks: required fields and types, unique rule ids, non-empty patterns,
-    compilable regexes, and `use` for `prefer` rules.
+    compilable regexes, and `use` for `prefer` rules. Regexes are trusted admin input:
+    pack authors must avoid catastrophic backtracking (nested quantifiers such as `(a+)+`).
     """
     if not isinstance(data, dict):
         raise PackError("パックの形式が不正です(name / version / rules を持つ辞書にする)")
@@ -86,11 +90,12 @@ def check_pack(pages: list[Page], pack: StandardPack) -> list[LintFinding]:
     Page-level findings come first (page order, then rule order, one per matched text);
     document-level `required` findings follow with page 0. Whitespace and line breaks are
     ignored when matching, because PDF text extraction inserts them at font changes and
-    line wraps (e.g. 「業界 No.1」, 「必\nず」).
+    line wraps (e.g. 「業界 No.1」, 「必\nず」). Matches never span a title/body or a
+    page boundary.
     """
     findings: list[LintFinding] = []
     for page in pages:
-        text = _squash(f"{page.title}\n{page.body}")
+        text = _page_text(page)
         for rule in pack.rules:
             if rule.kind == "required":
                 continue
@@ -102,7 +107,7 @@ def check_pack(pages: list[Page], pack: StandardPack) -> list[LintFinding]:
                 )
                 findings.append(_finding(rule, detail, page.no))
 
-    whole = _squash("".join(f"{p.title}{p.body}" for p in pages))
+    whole = _BOUNDARY.join(_page_text(p) for p in pages)
     for rule in pack.rules:
         if rule.kind == "required" and not _matches(rule, whole):
             findings.append(_finding(rule, rule.message, 0))
@@ -118,6 +123,11 @@ def _matches(rule: Rule, text: str) -> list[str]:
             if match.group(0) and match.group(0) not in hits:
                 hits.append(match.group(0))
     return hits
+
+
+def _page_text(page: Page) -> str:
+    """Title and body squashed separately and kept apart, so matches never span them."""
+    return f"{_squash(page.title)}{_BOUNDARY}{_squash(page.body)}"
 
 
 def _squash(text: str) -> str:
