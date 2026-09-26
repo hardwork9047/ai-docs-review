@@ -225,3 +225,23 @@ def test_health_uses_the_configured_timeout() -> None:
     )
     asyncio.run(client.health())
     assert seen[0].extensions["timeout"]["read"] == 7.5
+
+
+def test_modal_timeout_redirect_is_followed_to_the_original_response() -> None:
+    # Regression: Modal はリクエストが 150 秒を超えると 303 で待ち受け用の URL を返す
+    # (__modal_attempt_token 付き)。GET で追うと元の応答(ストリーム)が届く。
+    # コールドスタート直後の 1 ページ目がこれで失敗していた
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if request.method == "POST":
+            return httpx.Response(303, headers={"location": "/api/chat?__modal_attempt_token=abc"})
+        return _ndjson({"message": {"content": '{"ok": 1}'}, "done": True})
+
+    settings = Settings(ollama_url="http://ollama.test", ollama_headers={"Modal-Key": "k"})
+    client = OllamaClient(settings, transport=httpx.MockTransport(handler))
+    assert asyncio.run(client.complete("s", "u", {})) == '{"ok": 1}'
+    follow = seen[1]
+    assert (follow.method, follow.url.params["__modal_attempt_token"]) == ("GET", "abc")
+    assert follow.headers["Modal-Key"] == "k"  # 認証ヘッダーを付けたまま追う
