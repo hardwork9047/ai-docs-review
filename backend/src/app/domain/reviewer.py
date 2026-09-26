@@ -101,4 +101,26 @@ def build_system_prompt(reviewer: Reviewer, pack: StandardPack | None) -> str:
 
     Without a pack (or with no guidelines) this is exactly `reviewer.system_prompt`.
     """
-    raise NotImplementedError
+    if pack is None:
+        return reviewer.system_prompt
+    g = pack.review_guidelines
+    sections = [
+        ("内容(content_score)", g.content),
+        ("図(figure_score)", g.figure),
+        ("グラフ(chart_score)", g.chart),
+    ]
+    lines = [
+        f"- {label}:\n" + "\n".join(f"  - {item}" for item in items)
+        for label, items in sections
+        if items
+    ]
+    if not lines:
+        return reviewer.system_prompt
+    return (
+        f"{reviewer.system_prompt}\n"
+        f"## 会社の観点(基準パック「{pack.name}」v{pack.version})\n"
+        "上の採点観点に加えて、次の会社の観点も確かめて点数に反映する。\n"
+        "守れていない観点は bad_points に、直し方は fixes に書く。当てはまらない観点は無視する。\n"
+        + "\n".join(lines)
+        + "\n"
+    )

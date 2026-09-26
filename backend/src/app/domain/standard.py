@@ -74,8 +74,10 @@ def parse_pack(data: object) -> StandardPack:
     """Validate a pack loaded from YAML/JSON. Raise `PackError` with a readable reason.
 
     Checks: required fields and types, unique rule ids, non-empty patterns,
-    compilable regexes, and `use` for `prefer` rules. Regexes are trusted admin input:
-    pack authors must avoid catastrophic backtracking (nested quantifiers such as `(a+)+`).
+    compilable regexes, `use` for `prefer` rules, and review_guidelines limits
+    (MAX_GUIDELINES items of up to MAX_GUIDELINE_LEN chars per criterion).
+    Regexes are trusted admin input: pack authors must avoid catastrophic backtracking
+    (nested quantifiers such as `(a+)+`).
     """
     if not isinstance(data, dict):
         raise PackError("パックの形式が不正です(name / version / rules を持つ辞書にする)")
@@ -100,6 +102,19 @@ def parse_pack(data: object) -> StandardPack:
                     re.compile(pattern)
                 except re.error as exc:
                     raise PackError(f"{rule.id}: 正規表現が不正です: {pattern}") from exc
+
+    for criterion, items in pack.review_guidelines.model_dump().items():
+        if len(items) > MAX_GUIDELINES:
+            raise PackError(
+                f"review_guidelines.{criterion}: 観点は{MAX_GUIDELINES}件までにしてください"
+            )
+        for item in items:
+            if not item.strip():
+                raise PackError(f"review_guidelines.{criterion}: 空の観点があります")
+            if len(item) > MAX_GUIDELINE_LEN:
+                raise PackError(
+                    f"review_guidelines.{criterion}: 1件{MAX_GUIDELINE_LEN}字までにしてください"
+                )
     return pack
 
 

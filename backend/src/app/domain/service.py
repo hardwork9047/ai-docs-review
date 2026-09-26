@@ -21,7 +21,13 @@ from app.domain.review import (
     Summary,
     summarize,
 )
-from app.domain.reviewer import BOSS, Reviewer, ReviewerProfile, build_page_prompt
+from app.domain.reviewer import (
+    BOSS,
+    Reviewer,
+    ReviewerProfile,
+    build_page_prompt,
+    build_system_prompt,
+)
 from app.domain.standard import StandardPack, check_pack
 
 
@@ -116,6 +122,7 @@ async def review_document(
     )
 
     outline = [p.title for p in targets]
+    system_prompt = build_system_prompt(reviewer, pack)
     schema = PageAssessment.model_json_schema()
     results: list[PageResult] = []
     failed = 0
@@ -124,7 +131,7 @@ async def review_document(
         prompt = build_page_prompt(page, len(targets), outline, measured)
         images = [page.image] if page.image else []
         try:
-            raw = await llm.complete(reviewer.system_prompt, prompt, schema, images)
+            raw = await llm.complete(system_prompt, prompt, schema, images)
             assessment = PageAssessment.model_validate_json(raw)
         except LLMError as exc:
             failed += 1
