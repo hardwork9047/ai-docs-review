@@ -28,6 +28,9 @@ export function healthLabel(health: Health | null): { text: string; tone: Tone }
 export function verdictLabel(summary: Summary): { text: string; tone: Tone } {
   const { verdict } = summary;
   if (!verdict) return { text: "採点できませんでした", tone: "ng" };
+  if (verdict.formal_passed === false) {
+    return { text: "会社ルールの必須項目に違反があります", tone: "ng" };
+  }
   if (verdict.overall_passed) return { text: "提出OK", tone: "ok" };
   if (verdict.passed) return { text: "機械チェックの指摘を直せば提出OK", tone: "warn" };
   return { text: "要修正", tone: "ng" };
@@ -55,12 +58,20 @@ export function lintLabel(finding: LintFinding): {
   source: string;
   must: boolean;
 } {
-  void finding;
-  throw new Error("not implemented");
+  if (!finding.rule_id) return { tag: finding.rule, place: "", source: "", must: false };
+  const must = finding.severity === "must";
+  const page = finding.page ?? 0;
+  return {
+    tag: `${finding.rule}・${must ? "必須" : "推奨"}`,
+    place: page > 0 ? `P${page}` : "資料全体",
+    source: finding.source ?? "",
+    must,
+  };
 }
 
 /** "サンプル基準 v1.0", or null when no standard pack is configured. */
-export function standardLabel(standard: { name: string; version: string } | null | undefined): string | null {
-  void standard;
-  throw new Error("not implemented");
+export function standardLabel(
+  standard: { name: string; version: string } | null | undefined,
+): string | null {
+  return standard ? `${standard.name} v${standard.version}` : null;
 }
