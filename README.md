@@ -12,6 +12,7 @@ LLM は Ollama(`gemma4:e2b`、vision 対応)を使う。本番は Modal の GPU�
   | フォント | 計測 | ページ内の書体ファミリー数(pptx は元ファイルの書体) |
   | 文字量 | 計測 | ページの文字数(150字以下が満点) |
 - **機械チェック**: 表記ゆれ・半角カナ・長文・表紙タイトルを LLM なしで即時判定
+- **会社ルール(基準パック)**: 会社ごとの禁止表現・表記の統一・必須記載事項を YAML で定義し、根拠の条文付きで決定的に判定。must の違反があれば「会社ルールの必須項目に違反があります」(下記「基準パック」)
 - **総合判定**: 全ページ平均 70 点以上で合格。機械チェックもゼロなら「提出OK」
 - **Markdown ダウンロード**: 採点結果(修正点のチェック状態つき)を `.md` で保存
 - pptx は LibreOffice で PDF 化し、ページ画像・文字サイズは PDF から、テキスト・書体は pptx から読む
@@ -83,6 +84,36 @@ URL と認証情報は**リポジトリに書かない**(公開リポジトリ�
 - **応答はストリーミング**: 画面にはページごとに結果を流し(NDJSON)、Ollama からも `stream: true` で受け取る。
   Cloudflare(524)は 1 回だけ再試行する
 - **GPU を無駄に起こさない**: Render のヘルスチェックは Ollama を呼ばない `/api/live` を使う
+
+## 基準パック(会社ルール)
+
+会社のガイドラインを YAML で書き、`REVIEW_STANDARD_PATH` にそのパスを渡すと、機械チェックに「会社ルール」の指摘が加わる。
+判定は文字列・正規表現の照合だけで行う(LLM を使わない)ので、同じ資料なら毎回同じ結果になる。照合では空白・改行を無視する。
+
+```yaml
+name: サンプル基準(介護向け提案書)
+version: "1.0"
+rules:
+  - id: R-EXPR-01
+    kind: forbid            # forbid: 禁止表現 / prefer: 表記の統一(use が推奨表記)/ required: 資料のどこかに必須
+    patterns: [必ず, 絶対, 100%, 確実に]
+    severity: must          # must: 違反があれば不合格(formal_passed=false)/ should: 推奨
+    source: 提案書作成ガイドライン §4.2 効果の言い切りの禁止
+    message: 効果を言い切らない
+```
+
+- サンプル: `backend/tests/fixtures/packs/sample_care_sales.yaml`(架空。10 ルール)
+- **顧客のパックはリポジトリに置かない**。Render では Secret File にして、そのパスを `REVIEW_STANDARD_PATH` に設定する
+- 使っているパックは `GET /api/standard` と画面・Markdown の「基準」に表示される
+
+### 違反を仕込んだサンプル資料(比較実験・デモ用)
+
+```bash
+make sample-deck   # samples/violation-deck.pptx・.pdf(架空の提案書 9 ページ、違反 20 件)と answer-key.md
+```
+
+サンプルのパックで採点すると、正解表の 20 件がちょうど検出される(pptx 経路・PDF 経路とも。テストで保証)。
+Copilot など他のツールに同じ資料をかけ、検出率・再現性・根拠の有無を比べるのに使う。
 
 ## 必要なツール
 
@@ -194,12 +225,14 @@ Quick Tunnel の URL は起動のたびに変わる。アプリ側も 524 は 1 
 | `REVIEW_MAX_UPLOAD_MB` | `50` | アップロード上限 |
 | `REVIEW_IMAGE_WIDTH` | `1024` | LLM に渡すページ画像の幅(px) |
 | `REVIEW_SOFFICE_PATH` | 自動検出 | LibreOffice `soffice` のパス |
+| `REVIEW_STANDARD_PATH` | 未設定 | 基準パック(YAML)のパス。未設定なら会社ルールのチェックはしない |
 | `REVIEW_STATIC_DIR` | 未設定 | ビルド済み frontend の配信元(render.yaml・Dockerfile で設定済み) |
 
 ## API
 
 - `GET /api/live` — `{status: "ok"}`(生存確認。Ollama を呼ばない。Render のヘルスチェック用)
 - `GET /api/health` — `{ok, model, model_ready, error}`(Ollama の接続確認)
+- `GET /api/standard` — `{name, version, rules}`(基準パックが無ければ `null`。ルール本文は返さない)
 - `GET /api/capabilities` — `{formats: ["pdf", "pptx"]}`(LibreOffice が無ければ `["pdf"]`)
 - `POST /api/review`(multipart `file`、.pptx / .pdf のみ)— NDJSON で
   `meta`(ページ数・機械チェック)→ `page` / `page_error`(1 ページずつ)→ `done`(基準別平均・判定)
@@ -250,9 +283,9 @@ Quick Tunnel の URL は起動のたびに変わる。アプリ側も 524 は 1 
 backend/src/app/
   domain/   pages(ページ・pptx テキスト重ね合わせ)/ metrics(計測で採点する3基準)
             review(6基準・LLM スキーマ・集計)/ reviewer(部長の定義・ページ用プロンプト)
-            precheck(機械チェック)/ service(meta→page…→done のイベント生成)
+            precheck(機械チェック)/ standard(基準パック・会社ルールの判定)/ service(meta→page…→done のイベント生成)
   infra/    document(形式判定・読み込み)/ converter(LibreOffice)/ pptx_fix(日本語書体の補正)
-            pdf_reader / pptx_reader / ollama(stream + 画像 + ヘッダー)/ settings
+            standards(基準パックの読み込み)/ pdf_reader / pptx_reader / ollama(stream + 画像 + ヘッダー)/ settings
   api/      routes(/api/live, /api/health, /api/capabilities, /api/review)/ limits(アップロード上限)
 frontend/src/
   logic/    events / ndjson / state(reducer)/ labels / markdown / files / escape  ← vitest
