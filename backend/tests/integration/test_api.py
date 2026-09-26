@@ -191,3 +191,16 @@ def test_standard_endpoint_describes_the_pack(llm: FakeLLM, tmp_path: Path) -> N
 
 def test_standard_endpoint_is_null_without_a_pack(client: TestClient) -> None:
     assert client.get("/api/standard").json() is None
+
+
+def test_broken_standard_pack_is_a_server_error_not_silently_skipped(
+    llm: FakeLLM, tmp_path: Path
+) -> None:
+    # 会社ルールが黙って無効になるより、設定ミスとして 500 で気づけるほうを選ぶ
+    missing = tmp_path / "missing.yaml"
+    app = create_app()
+    app.dependency_overrides[get_llm] = lambda: llm
+    app.dependency_overrides[get_settings] = lambda: Settings(standard_path=str(missing))
+    with TestClient(app, raise_server_exceptions=False) as c:
+        assert c.get("/api/standard").status_code == 500
+        assert _post(c, PDF).status_code == 500

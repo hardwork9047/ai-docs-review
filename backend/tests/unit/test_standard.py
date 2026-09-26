@@ -152,3 +152,16 @@ def test_spaces_and_line_breaks_inside_a_match_are_ignored() -> None:
     findings = _check("効果は必\nず改善します", "料 金は別紙")
     assert [(f.rule_id, f.page) for f in findings] == [("R-FORBID-01", 1)]
     assert findings[0].detail == "効果を言い切らない(「必ず改善」)"
+
+
+def test_required_item_is_not_satisfied_across_a_page_boundary() -> None:
+    # Regression: 空白を詰めるときにページの境目まで詰めると、1ページ目末尾の「料」と
+    # 2ページ目先頭の「金」がつながって「料金あり」と誤判定されていた
+    pages = [Page(no=1, title="t1", body="概要と料"), Page(no=2, title="金額感", body="なし")]
+    findings = check_pack(pages, parse_pack(PACK))
+    assert [f.rule_id for f in findings] == ["R-REQ-01"]
+
+
+def test_matches_do_not_span_the_title_and_the_body() -> None:
+    pages = [Page(no=1, title="効果は必", body="ず改善の料金")]
+    assert check_pack(pages, parse_pack(PACK)) == []
