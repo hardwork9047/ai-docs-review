@@ -503,6 +503,35 @@ button {
   text-decoration: line-through;
 }
 
+.tag.must {
+  background: #fdecec;
+  color: var(--poor);
+}
+
+.place {
+  display: inline-block;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--blue);
+  background: none;
+  border: 0;
+  padding: 0;
+  margin-right: 8px;
+}
+
+button.place {
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.source {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
 .tag {
   display: inline-block;
   font-size: 12px;

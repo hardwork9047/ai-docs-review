@@ -30,4 +30,7 @@ class Settings(BaseSettings):
     image_width: int = 1024  # LLM に渡すページ画像の幅(px)
     soffice_path: str | None = None  # None なら PATH / macOS の既定位置から探す
 
+    # 会社ルールの基準パック(YAML)。未設定なら会社ルールのチェックはしない
+    standard_path: str | None = None
+
     static_dir: str | None = None  # ビルド済み frontend(Render の 1 サービス構成で使用)

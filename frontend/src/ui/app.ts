@@ -9,7 +9,15 @@ import { escapeHtml as esc, formatInline } from "../logic/escape";
 import type { PageResult } from "../logic/events";
 import { parseEvent } from "../logic/events";
 import { ACCEPT, ALL_FORMATS, acceptFor, rejectReason, type UploadKind } from "../logic/files";
-import { formatScore, type Health, healthLabel, scoreTone, verdictLabel } from "../logic/labels";
+import {
+  formatScore,
+  type Health,
+  healthLabel,
+  lintLabel,
+  scoreTone,
+  standardLabel,
+  verdictLabel,
+} from "../logic/labels";
 import { markdownFileName, toMarkdown } from "../logic/markdown";
 import { splitLines } from "../logic/ndjson";
 import {
@@ -287,13 +295,27 @@ function summaryHtml(): string {
 }
 
 function lintHtml(): string {
-  const lint = state.meta!.lint;
+  const { lint, standard } = state.meta!;
   const items = lint
-    .map((f, i) => checkHtml(checkKey("lint", 0, i), `<span class="tag">${esc(f.rule)}</span>${esc(f.detail)}`))
+    .map((f, i) => {
+      const label = lintLabel(f);
+      const place = label.place.startsWith("P")
+        ? `<button class="place" data-goto="${label.place.slice(1)}">${label.place}</button>`
+        : label.place
+          ? `<span class="place">${label.place}</span>`
+          : "";
+      const source = label.source ? `<span class="source">根拠: ${esc(label.source)}</span>` : "";
+      const tag = `<span class="tag${label.must ? " must" : ""}">${esc(label.tag)}</span>`;
+      return checkHtml(checkKey("lint", 0, i), `${tag}${place}${esc(f.detail)}${source}`);
+    })
     .join("");
+  const std = standardLabel(standard);
+  const subtitle = std
+    ? `会社ルール(${esc(std)})と表記ゆれ・半角カナ・長文・表紙。LLM を使わない決定的な判定`
+    : "表記ゆれ・半角カナ・長文・表紙(LLM を使わない即時判定)";
   return `
     <section class="card">
-      <h2>機械チェック<small>表記ゆれ・半角カナ・長文・表紙(LLM を使わない即時判定)</small></h2>
+      <h2>機械チェック<small>${subtitle}</small></h2>
       ${items || `<p class="empty">指摘はありません。</p>`}
     </section>`;
 }

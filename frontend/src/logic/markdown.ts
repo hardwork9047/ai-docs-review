@@ -1,7 +1,7 @@
 /** Markdown export of a finished review (downloaded as a .md file by ui/). */
 
 import type { CriterionScore, PageResult } from "./events";
-import { formatScore, verdictLabel } from "./labels";
+import { formatScore, lintLabel, standardLabel, verdictLabel } from "./labels";
 import { checkKey, type PageFailure, type ReviewState } from "./state";
 
 /** Render the review as Markdown: summary table, rule checks, then one section per page. */
@@ -15,6 +15,8 @@ export function toMarkdown(state: ReviewState): string {
     const total = summary.reviewed_pages + summary.failed_pages;
     out.push(`- 採点ページ: ${summary.reviewed_pages} / ${total}(失敗 ${summary.failed_pages})`);
   }
+  const standard = standardLabel(meta?.standard);
+  if (standard) out.push(`- 基準: ${standard}`);
   if (meta?.truncated) {
     out.push(`- 全${meta.page_count}ページ中、先頭${meta.review_count}ページのみ採点しました`);
   }
@@ -30,7 +32,10 @@ export function toMarkdown(state: ReviewState): string {
   const lint = meta?.lint ?? [];
   if (lint.length === 0) out.push("指摘はありません。");
   lint.forEach((f, i) => {
-    out.push(`- ${box(state, checkKey("lint", 0, i))} ${f.rule}: ${f.detail}`);
+    const label = lintLabel(f);
+    const place = label.place ? `(${label.place})` : "";
+    const source = label.source ? ` — 根拠: ${label.source}` : "";
+    out.push(`- ${box(state, checkKey("lint", 0, i))} ${label.tag}${place}: ${f.detail}${source}`);
   });
 
   out.push("", "## ページ別");

@@ -87,3 +87,28 @@ describe("markdownFileName", () => {
     expect(markdownFileName(null)).toBe("review.md");
   });
 });
+
+describe("toMarkdown with company rules", () => {
+  it("shows the standard pack and cites the clause for company findings", () => {
+    const state = finished();
+    const meta = {
+      ...META,
+      standard: { name: "サンプル基準", version: "1.0" },
+      lint: [
+        {
+          rule: "会社ルール",
+          detail: "効果を言い切らない(「必ず」)",
+          rule_id: "R-EXPR-01",
+          severity: "must" as const,
+          source: "ガイドライン §4.2",
+          page: 3,
+        },
+      ],
+    };
+    const md = toMarkdown({ ...state, meta });
+    expect(md).toContain("- 基準: サンプル基準 v1.0");
+    expect(md).toContain(
+      "- [ ] 会社ルール・必須(P3): 効果を言い切らない(「必ず」) — 根拠: ガイドライン §4.2",
+    );
+  });
+});

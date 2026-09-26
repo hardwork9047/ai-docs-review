@@ -17,6 +17,7 @@ from app.domain.service import (
     PageEvent,
     review_document,
 )
+from app.domain.standard import parse_pack
 
 GOOD_REPLY = json.dumps(
     {
@@ -142,3 +143,53 @@ def test_done_carries_verdict_with_lint() -> None:
     assert done.summary.verdict is not None
     assert done.summary.score == 85  # (60 + 100 + 80 + 100) / 4
     assert done.summary.verdict.overall_passed
+
+
+PACK = parse_pack(
+    {
+        "name": "サンプル",
+        "version": "1.0",
+        "rules": [
+            {
+                "id": "R-FORBID-01",
+                "kind": "forbid",
+                "patterns": ["本文"],
+                "severity": "must",
+                "source": "§1",
+                "message": "禁止",
+            }
+        ],
+    }
+)
+
+
+def _run_with_pack(pages: list[Page]) -> list[Event]:
+    async def collect() -> list[Event]:
+        return [
+            e async for e in review_document(pages, FakeLLM(GOOD_REPLY), max_pages=40, pack=PACK)
+        ]
+
+    return asyncio.run(collect())
+
+
+def test_pack_findings_follow_builtin_lint_and_name_the_pack() -> None:
+    meta = _run_with_pack([Page(no=1, title="", body="本文")])[0]
+    assert isinstance(meta, MetaEvent)
+    assert [f.rule for f in meta.lint] == ["必須項目", "会社ルール"]
+    assert meta.lint[1].rule_id == "R-FORBID-01"
+    assert meta.standard is not None
+    assert (meta.standard.name, meta.standard.version) == ("サンプル", "1.0")
+
+
+def test_must_violation_fails_the_formal_verdict() -> None:
+    done = _run_with_pack(_pages(1))[-1]
+    assert isinstance(done, DoneEvent)
+    assert done.summary.verdict is not None
+    assert not done.summary.verdict.formal_passed
+
+
+def test_without_a_pack_there_is_no_standard_and_no_company_findings() -> None:
+    meta = _run(_pages(1), FakeLLM(GOOD_REPLY))[0]
+    assert isinstance(meta, MetaEvent)
+    assert meta.standard is None
+    assert all(f.rule != "会社ルール" for f in meta.lint)

@@ -83,10 +83,15 @@ class PageResult(BaseModel):
 
 
 class Verdict(BaseModel):
-    """`passed`: overall score >= pass score. `overall_passed` also needs zero lint."""
+    """`passed`: overall score >= pass score. `overall_passed` also needs zero lint.
+
+    `formal_passed`: no "must" rule-check finding (company rules). Deterministic: it does
+    not depend on LLM scores, so the same document always gets the same value.
+    """
 
     passed: bool
     overall_passed: bool
+    formal_passed: bool = True
 
 
 class Summary(BaseModel):
@@ -117,7 +122,11 @@ def summarize(
     verdict = None
     if score is not None:
         passed = score >= pass_score
-        verdict = Verdict(passed=passed, overall_passed=passed and not lint)
+        verdict = Verdict(
+            passed=passed,
+            overall_passed=passed and not lint,
+            formal_passed=not any(f.severity == "must" for f in lint),
+        )
     return Summary(
         criteria=criteria,
         score=score,

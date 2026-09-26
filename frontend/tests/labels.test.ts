@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatScore, healthLabel, scoreTone, verdictLabel } from "../src/logic/labels";
+import { formatScore, healthLabel, lintLabel, scoreTone, standardLabel, verdictLabel } from "../src/logic/labels";
 import { DONE } from "./fixtures";
 
 const summary = (verdict: typeof DONE.summary.verdict) => ({ ...DONE.summary, verdict });
@@ -66,5 +66,53 @@ describe("formatScore", () => {
   it("prints numbers and a dash for not-applicable", () => {
     expect(formatScore(82)).toBe("82");
     expect(formatScore(null)).toBe("–");
+  });
+});
+
+describe("verdictLabel with company rules", () => {
+  it("fails formally on a must violation even if the reviewer passed", () => {
+    const label = verdictLabel(summary({ passed: true, overall_passed: false, formal_passed: false }));
+    expect(label).toEqual({ text: "会社ルールの必須項目に違反があります", tone: "ng" });
+  });
+
+  it("keeps the previous wording when formal_passed is true or absent", () => {
+    expect(verdictLabel(summary({ passed: true, overall_passed: true, formal_passed: true })).text).toBe(
+      "提出OK",
+    );
+    expect(verdictLabel(summary({ passed: false, overall_passed: false })).text).toBe("要修正");
+  });
+});
+
+describe("lintLabel", () => {
+  it("labels a company rule with severity, page and source", () => {
+    const label = lintLabel({
+      rule: "会社ルール",
+      detail: "d",
+      rule_id: "R-EXPR-01",
+      severity: "must",
+      source: "ガイドライン §4.2",
+      page: 3,
+    });
+    expect(label).toEqual({ tag: "会社ルール・必須", place: "P3", source: "ガイドライン §4.2", must: true });
+  });
+
+  it("marks document-level and advisory findings", () => {
+    const label = lintLabel({ rule: "会社ルール", detail: "d", rule_id: "R", severity: "should", source: "§2", page: 0 });
+    expect(label).toEqual({ tag: "会社ルール・推奨", place: "資料全体", source: "§2", must: false });
+  });
+
+  it("leaves built-in checks as they were", () => {
+    expect(lintLabel({ rule: "半角カナ", detail: "d" })).toEqual({ tag: "半角カナ", place: "", source: "", must: false });
+  });
+});
+
+describe("standardLabel", () => {
+  it("shows name and version", () => {
+    expect(standardLabel({ name: "サンプル基準", version: "1.0" })).toBe("サンプル基準 v1.0");
+  });
+
+  it("is null without a pack", () => {
+    expect(standardLabel(null)).toBeNull();
+    expect(standardLabel(undefined)).toBeNull();
   });
 });

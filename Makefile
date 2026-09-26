@@ -1,7 +1,7 @@
 # 統一エントリポイント。skills・CI・人間はすべてこの Makefile 経由でコマンドを実行する。
 # スタックを変更する場合はここを書き換えれば skills 側の修正は不要。
 
-.PHONY: setup test test-backend test-frontend lint format typecheck check dev serve dev-backend dev-frontend modal-pull modal-deploy
+.PHONY: sample-deck setup test test-backend test-frontend lint format typecheck check dev serve dev-backend dev-frontend modal-pull modal-deploy
 
 ## セットアップ ---------------------------------------------------------------
 
@@ -54,3 +54,8 @@ modal-pull: ## 初回のみ: gemma4:e2b を Modal の Volume にダウンロー�
 
 modal-deploy: ## Ollama を Modal にデプロイ(表示された URL を REVIEW_OLLAMA_URL に設定)
 	uvx modal deploy deploy/modal_ollama.py
+
+## サンプル資料 ------------------------------------------------------------------
+
+sample-deck: ## 違反を20件仕込んだ架空の提案書(pptx)と正解表を samples/ に出力
+	cd backend && uv run python -m tests.fixtures.violation_deck ../samples
