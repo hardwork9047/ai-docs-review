@@ -77,13 +77,24 @@ export function standardLabel(
 }
 
 /** Small mark for who scored a criterion: "AI" (LLM) or "計測" (Python). Null if unknown. */
-export function methodMark(method: "llm" | "rule" | undefined): { text: string; title: string } | null {
-  void method;
-  throw new Error("not implemented");
+export function methodMark(
+  method: "llm" | "rule" | undefined,
+): { text: string; title: string } | null {
+  if (method === "llm") return { text: "AI", title: "AI(LLM)がページ画像とテキストを見て採点" };
+  if (method === "rule") return { text: "計測", title: "Python で PDF から計測(毎回同じ結果)" };
+  return null;
 }
 
 /** "80 tok/s・入力 812・出力 640 tokens"; parts that were not reported are left out. */
 export function formatUsage(usage: LLMUsage | UsageTotal | null | undefined): string | null {
-  void usage;
-  throw new Error("not implemented");
+  if (!usage) return null;
+  const num = (n: number) => n.toLocaleString("en-US");
+  const parts: string[] = [];
+  if (usage.tokens_per_second != null) parts.push(`${usage.tokens_per_second} tok/s`);
+  if (usage.input_tokens != null) parts.push(`入力 ${num(usage.input_tokens)}`);
+  if (usage.output_tokens != null) parts.push(`出力 ${num(usage.output_tokens)}`);
+  if (usage.input_tokens == null && usage.output_tokens == null) {
+    return parts.length ? parts.join("・") : null;
+  }
+  return `${parts.join("・")} tokens`;
 }
