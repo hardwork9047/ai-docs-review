@@ -113,7 +113,11 @@ class PageResult(BaseModel):
         }
         by_criterion = {m.criterion: m for m in measured}
         scores = [
-            by_criterion.get(c) or CriterionScore(criterion=c, score=judged.get(c))
+            (
+                by_criterion[c].model_copy(update={"method": CRITERION_METHOD[c]})
+                if c in by_criterion
+                else CriterionScore(criterion=c, score=judged.get(c), method=CRITERION_METHOD[c])
+            )
             for c in CRITERIA
         ]
         return cls(
@@ -125,6 +129,7 @@ class PageResult(BaseModel):
             bad_points=assessment.bad_points,
             fixes=assessment.fixes,
             thumbnail=encode_thumbnail(page.image),
+            usage=usage,
         )
 
 
@@ -163,7 +168,14 @@ def summarize(
         values = [s.score for r in results for s in r.scores if s.criterion == criterion]
         applicable = [v for v in values if v is not None]
         note = f"{len(applicable)}ページ" if applicable else ""
-        criteria.append(CriterionScore(criterion=criterion, score=_mean(applicable), note=note))
+        criteria.append(
+            CriterionScore(
+                criterion=criterion,
+                score=_mean(applicable),
+                note=note,
+                method=CRITERION_METHOD[criterion],
+            )
+        )
 
     score = _mean([r.score for r in results])
     verdict = None
@@ -180,6 +192,7 @@ def summarize(
         reviewed_pages=len(results),
         failed_pages=failed_pages,
         verdict=verdict,
+        usage=total_usage(results),
     )
 
 
@@ -195,4 +208,14 @@ def encode_thumbnail(image: bytes) -> str:
 
 def total_usage(results: Sequence[PageResult]) -> UsageTotal | None:
     """Sum token usage over pages that reported it; None when none did."""
-    raise NotImplementedError
+    usages = [r.usage for r in results if r.usage is not None]
+    if not usages:
+        return None
+    output = sum(u.output_tokens or 0 for u in usages)
+    seconds = sum(u.eval_seconds or 0 for u in usages)
+    return UsageTotal(
+        input_tokens=sum(u.input_tokens or 0 for u in usages),
+        output_tokens=output,
+        tokens_per_second=round(output / seconds, 1) if seconds else None,
+        pages=len(usages),
+    )

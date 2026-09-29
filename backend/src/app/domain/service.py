@@ -139,8 +139,10 @@ async def review_document(
         prompt = build_page_prompt(page, len(targets), outline, measured)
         images = [page.image] if page.image else []
         try:
-            raw = await llm.complete(system_prompt, prompt, schema, images)
-            assessment = PageAssessment.model_validate_json(raw)
+            reply = await llm.complete(system_prompt, prompt, schema, images)
+            if isinstance(reply, str):
+                reply = LLMReply(text=reply)
+            assessment = PageAssessment.model_validate_json(reply.text)
         except LLMError as exc:
             failed += 1
             yield PageErrorEvent(no=page.no, message=f"LLMの呼び出しに失敗しました: {exc}")
@@ -149,7 +151,7 @@ async def review_document(
             failed += 1
             yield PageErrorEvent(no=page.no, message=f"LLMの出力がスキーマに合いません: {exc}")
             continue
-        result = PageResult.build(page, assessment, measured)
+        result = PageResult.build(page, assessment, measured, reply.usage)
         results.append(result)
         yield PageEvent(result=result)
 
