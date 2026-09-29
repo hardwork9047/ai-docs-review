@@ -16,6 +16,7 @@ from app.domain.precheck import LintFinding, run_precheck
 from app.domain.review import (
     CRITERIA,
     Criterion,
+    LLMUsage,
     PageAssessment,
     PageResult,
     Summary,
@@ -35,13 +36,20 @@ class LLMError(Exception):
     """The LLM backend could not produce a reply (connection, HTTP or timeout failure)."""
 
 
+class LLMReply(BaseModel):
+    """The raw JSON text of an LLM reply, with its token usage when known."""
+
+    text: str
+    usage: LLMUsage | None = None
+
+
 class ReviewLLM(Protocol):
     """Port for a (vision) chat LLM that returns JSON constrained by a JSON schema."""
 
     async def complete(
         self, system: str, user: str, schema: dict[str, Any], images: Sequence[bytes] = ()
-    ) -> str:
-        """Return the raw JSON text of the reply. Raise `LLMError` on backend failure.
+    ) -> "str | LLMReply":
+        """Return the reply (plain text, or `LLMReply` with usage). Raise `LLMError` on failure.
 
         `images` are attached to the user message (JPEG/PNG bytes).
         """
@@ -131,8 +139,10 @@ async def review_document(
         prompt = build_page_prompt(page, len(targets), outline, measured)
         images = [page.image] if page.image else []
         try:
-            raw = await llm.complete(system_prompt, prompt, schema, images)
-            assessment = PageAssessment.model_validate_json(raw)
+            reply = await llm.complete(system_prompt, prompt, schema, images)
+            if isinstance(reply, str):
+                reply = LLMReply(text=reply)
+            assessment = PageAssessment.model_validate_json(reply.text)
         except LLMError as exc:
             failed += 1
             yield PageErrorEvent(no=page.no, message=f"LLMの呼び出しに失敗しました: {exc}")
@@ -141,7 +151,7 @@ async def review_document(
             failed += 1
             yield PageErrorEvent(no=page.no, message=f"LLMの出力がスキーマに合いません: {exc}")
             continue
-        result = PageResult.build(page, assessment, measured)
+        result = PageResult.build(page, assessment, measured, reply.usage)
         results.append(result)
         yield PageEvent(result=result)
 

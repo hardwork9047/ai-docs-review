@@ -7,10 +7,20 @@ import type {
   PageResult,
 } from "../src/logic/events";
 
+const METHOD: Record<CriterionScore["criterion"], "llm" | "rule"> = {
+  内容: "llm",
+  フォントサイズ: "rule",
+  フォント: "rule",
+  図: "llm",
+  グラフ: "llm",
+  文字量: "rule",
+};
+
 const score = (criterion: CriterionScore["criterion"], value: number | null, note = "") => ({
   criterion,
   score: value,
   note,
+  method: METHOD[criterion],
 });
 
 export const META: MetaEvent = {
@@ -43,6 +53,7 @@ export function page(no: number, overrides: Partial<PageResult> = {}): PageResul
     bad_points: ["数字の出典がない"],
     fixes: ["出典を脚注に入れる", "グラフに単位を付ける"],
     thumbnail: "",
+    usage: { model: "gemma4:e2b", input_tokens: 812, output_tokens: 640, eval_seconds: 8, tokens_per_second: 80 },
     ...overrides,
   };
 }
@@ -69,5 +80,6 @@ export const DONE: DoneEvent = {
     reviewed_pages: 2,
     failed_pages: 1,
     verdict: { passed: true, overall_passed: false },
+    usage: { input_tokens: 1624, output_tokens: 1280, tokens_per_second: 80, pages: 2 },
   },
 };

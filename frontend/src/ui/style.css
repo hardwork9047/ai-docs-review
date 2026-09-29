@@ -414,7 +414,7 @@ button {
 
 .crit {
   display: grid;
-  grid-template-columns: 112px 1fr 36px;
+  grid-template-columns: 148px 1fr 36px;
   align-items: center;
   gap: 12px;
   font-size: 14px;
@@ -782,4 +782,50 @@ footer {
   .drop {
     padding: 18px;
   }
+}
+
+/* 採点方法のマーク(AI = LLM / 計測 = Python) */
+.mark {
+  display: inline-block;
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 3px 5px;
+  border-radius: 4px;
+  margin-left: 5px;
+  vertical-align: middle;
+  letter-spacing: 0.02em;
+  cursor: help;
+}
+
+.mark.llm {
+  background: #f3e8ff;
+  color: #7c3aed;
+}
+
+.mark.rule {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.cell .mark {
+  margin-left: 3px;
+  padding: 2px 4px;
+  font-size: 9px;
+}
+
+.usage {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 12px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.page .usage {
+  margin: -8px 0 14px;
+}
+
+.usage .mark {
+  margin: 0 4px 0 0;
 }

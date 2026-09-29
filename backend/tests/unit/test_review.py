@@ -8,9 +8,11 @@ from app.domain.precheck import LintFinding
 from app.domain.review import (
     CRITERIA,
     CriterionScore,
+    LLMUsage,
     PageAssessment,
     PageResult,
     summarize,
+    total_usage,
 )
 
 MEASURED = [
@@ -130,3 +132,50 @@ def test_formal_verdict_fails_on_any_must_finding() -> None:
     summary = summarize([_result(1)], 0, [must], pass_score=70)
     assert summary.verdict is not None
     assert not summary.verdict.formal_passed
+
+
+def test_each_criterion_is_tagged_with_who_scored_it() -> None:
+    methods = {s.criterion: s.method for s in _result(1).scores}
+    assert methods == {
+        "内容": "llm",
+        "フォントサイズ": "rule",
+        "フォント": "rule",
+        "図": "llm",
+        "グラフ": "llm",
+        "文字量": "rule",
+    }
+
+
+def test_summary_criteria_carry_their_method() -> None:
+    summary = summarize([_result(1)], 0, [], 70)
+    assert [c.method for c in summary.criteria] == ["llm", "rule", "rule", "llm", "llm", "rule"]
+
+
+def _with_usage(no: int, usage: LLMUsage | None) -> PageResult:
+    page = Page(no=no, title=f"p{no}", body="")
+    return PageResult.build(page, _assessment(), MEASURED, usage)
+
+
+def test_usage_is_summed_and_speed_is_output_over_generation_time() -> None:
+    results = [
+        _with_usage(1, LLMUsage(input_tokens=100, output_tokens=50, eval_seconds=1.0)),
+        _with_usage(2, LLMUsage(input_tokens=200, output_tokens=150, eval_seconds=2.0)),
+        _with_usage(3, None),
+    ]
+    total = total_usage(results)
+    assert total is not None
+    assert (total.input_tokens, total.output_tokens, total.pages) == (300, 200, 2)
+    assert total.tokens_per_second == 66.7
+    assert summarize(results, 0, [], 70).usage == total
+
+
+def test_no_usage_when_no_page_reported_it() -> None:
+    assert total_usage([_with_usage(1, None)]) is None
+    assert summarize([_with_usage(1, None)], 0, [], 70).usage is None
+
+
+def test_missing_counts_are_treated_as_zero_in_the_total() -> None:
+    results = [_with_usage(1, LLMUsage(output_tokens=40, eval_seconds=None))]
+    total = total_usage(results)
+    assert total is not None
+    assert (total.input_tokens, total.output_tokens, total.tokens_per_second) == (0, 40, None)

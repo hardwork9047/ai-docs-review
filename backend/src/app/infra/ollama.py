@@ -8,7 +8,8 @@ from typing import Any
 import httpx
 from pydantic import BaseModel
 
-from app.domain.service import LLMError
+from app.domain.review import LLMUsage
+from app.domain.service import LLMError, LLMReply
 from app.infra.settings import Settings
 
 # Cloudflare が「オリジンから 100 秒以内に応答が無い」ときに返すステータス
@@ -37,8 +38,8 @@ class OllamaClient:
 
     async def complete(
         self, system: str, user: str, schema: dict[str, Any], images: Sequence[bytes] = ()
-    ) -> str:
-        """Return the model's JSON reply text. Raise `LLMError` on any backend failure.
+    ) -> LLMReply:
+        """Return the model's JSON reply text and usage. Raise `LLMError` on backend failure.
 
         The reply is received with `stream: true` and joined, so slow generations keep
         the connection alive through proxies with idle timeouts (e.g. Cloudflare's 100 s).
@@ -74,13 +75,14 @@ class OllamaClient:
                 raise LLMError(str(exc) or type(exc).__name__) from exc
         raise AssertionError("unreachable")  # pragma: no cover - loop always returns/raises
 
-    async def _chat(self, payload: dict[str, Any]) -> str:
+    async def _chat(self, payload: dict[str, Any]) -> LLMReply:
         async with (
             self._client(self._settings.timeout_seconds) as client,
             client.stream("POST", "/api/chat", json=payload) as response,
         ):
             response.raise_for_status()
             parts: list[str] = []
+            final: dict[str, Any] = {}
             async for line in response.aiter_lines():
                 if not line.strip():
                     continue
@@ -88,7 +90,9 @@ class OllamaClient:
                 if "error" in chunk:
                     raise LLMError(str(chunk["error"]))
                 parts.append(str(chunk.get("message", {}).get("content", "")))
-            return "".join(parts)
+                if chunk.get("done"):
+                    final = chunk
+            return LLMReply(text="".join(parts), usage=_usage(final))
 
     async def health(self) -> OllamaHealth:
         """Check `/api/tags`. Never raises: failures are reported as `ok=False`."""
@@ -113,3 +117,17 @@ class OllamaClient:
             # Modal は 150 秒を超えたリクエストに 303(待ち受け用 URL)を返す。追えば元の応答が届く
             follow_redirects=True,
         )
+
+
+def _usage(final: dict[str, Any]) -> LLMUsage:
+    """Usage from Ollama's final stream chunk (durations are in nanoseconds)."""
+    output = final.get("eval_count")
+    duration = final.get("eval_duration")
+    seconds = duration / 1e9 if isinstance(duration, int | float) and duration > 0 else None
+    return LLMUsage(
+        model=str(final.get("model", "")),
+        input_tokens=final.get("prompt_eval_count"),
+        output_tokens=output,
+        eval_seconds=seconds,
+        tokens_per_second=round(output / seconds, 1) if output and seconds else None,
+    )

@@ -11,9 +11,11 @@ import { parseEvent } from "../logic/events";
 import { ACCEPT, ALL_FORMATS, acceptFor, rejectReason, type UploadKind } from "../logic/files";
 import {
   formatScore,
+  formatUsage,
   type Health,
   healthLabel,
   lintLabel,
+  methodMark,
   scoreTone,
   standardLabel,
   verdictLabel,
@@ -267,12 +269,17 @@ function summaryHtml(): string {
   const summary = state.summary!;
   const verdict = verdictLabel(summary);
   const left = remaining(state);
+  const usage = formatUsage(summary.usage);
+  const summaryUsage =
+    usage && summary.usage
+      ? `<p class="usage">${markHtml("llm")}の使用量: ${usage}(${summary.usage.pages}ページ)</p>`
+      : "";
   const bars = summary.criteria
     .map((c) => {
       const na = c.score === null;
       return `
         <div class="crit${na ? " na" : ""}" title="${esc(c.note)}">
-          <span>${c.criterion}</span>
+          <span>${c.criterion}${markHtml(c.method)}</span>
           <span class="track"><i style="width:${c.score ?? 0}%"></i></span>
           <span class="val">${formatScore(c.score)}</span>
         </div>`;
@@ -285,6 +292,7 @@ function summaryHtml(): string {
         <div>
           <span class="verdict tone-${verdict.tone}">${verdict.text}</span>
           <div class="criteria">${bars}</div>
+          ${summaryUsage}
           <div class="actions">
             <button class="btn" id="download">${ICON_DL}採点結果を Markdown でダウンロード</button>
             <span class="hint">未対応の修正点 ${left.fixes}件 ・ 機械チェック ${left.lint}件</span>
@@ -315,7 +323,7 @@ function lintHtml(): string {
     : "表記ゆれ・半角カナ・長文・表紙(LLM を使わない即時判定)";
   return `
     <section class="card">
-      <h2>機械チェック<small>${subtitle}</small></h2>
+      <h2>機械チェック${markHtml("rule")}<small>${subtitle}</small></h2>
       ${items || `<p class="empty">指摘はありません。</p>`}
     </section>`;
 }
@@ -345,12 +353,18 @@ function renderPages(): void {
   }
 }
 
+function markHtml(method: "llm" | "rule" | undefined): string {
+  const mark = methodMark(method);
+  return mark ? `<i class="mark ${method}" title="${mark.title}">${mark.text}</i>` : "";
+}
+
 function pageHtml(page: PageResult): string {
   const tone = scoreTone(page.score);
+  const pageUsage = formatUsage(page.usage);
   const cells = page.scores
     .map(
       (s) =>
-        `<div class="cell ${scoreTone(s.score)}" title="${esc(s.note)}"><b>${formatScore(s.score)}</b>${s.criterion}</div>`,
+        `<div class="cell ${scoreTone(s.score)}" title="${esc(s.note)}"><b>${formatScore(s.score)}</b>${s.criterion}${markHtml(s.method)}</div>`,
     )
     .join("");
   const list = (items: string[]) => `<ul>${items.map((t) => `<li>${formatInline(t)}</li>`).join("")}</ul>`;
@@ -366,10 +380,11 @@ function pageHtml(page: PageResult): string {
         <span class="badge ${tone}">${formatScore(page.score)}</span>
       </div>
       <div class="cells">${cells}</div>
+      ${pageUsage ? `<p class="usage">${markHtml("llm")} ${pageUsage}</p>` : ""}
       <div class="notes">
-        <div class="good-col"><h4>良い点</h4>${list(page.good_points)}</div>
-        <div class="bad-col"><h4>悪い点</h4>${list(page.bad_points)}</div>
-        <div class="fix-col"><h4>修正点</h4>${fixes}</div>
+        <div class="good-col"><h4>良い点${markHtml("llm")}</h4>${list(page.good_points)}</div>
+        <div class="bad-col"><h4>悪い点${markHtml("llm")}</h4>${list(page.bad_points)}</div>
+        <div class="fix-col"><h4>修正点${markHtml("llm")}</h4>${fixes}</div>
       </div>
     </div>`;
 }

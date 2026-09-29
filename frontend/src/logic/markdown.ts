@@ -1,7 +1,14 @@
 /** Markdown export of a finished review (downloaded as a .md file by ui/). */
 
 import type { CriterionScore, PageResult } from "./events";
-import { formatScore, lintLabel, standardLabel, verdictLabel } from "./labels";
+import {
+  formatScore,
+  formatUsage,
+  lintLabel,
+  methodMark,
+  standardLabel,
+  verdictLabel,
+} from "./labels";
 import { checkKey, type PageFailure, type ReviewState } from "./state";
 
 /** Render the review as Markdown: summary table, rule checks, then one section per page. */
@@ -15,6 +22,10 @@ export function toMarkdown(state: ReviewState): string {
     const total = summary.reviewed_pages + summary.failed_pages;
     out.push(`- 採点ページ: ${summary.reviewed_pages} / ${total}(失敗 ${summary.failed_pages})`);
   }
+  const totalUsage = formatUsage(summary?.usage);
+  if (totalUsage && summary?.usage) {
+    out.push(`- LLM の使用量: ${totalUsage}(${summary.usage.pages}ページ)`);
+  }
   const standard = standardLabel(meta?.standard);
   if (standard) out.push(`- 基準: ${standard}`);
   if (meta?.truncated) {
@@ -22,9 +33,10 @@ export function toMarkdown(state: ReviewState): string {
   }
 
   if (summary) {
-    out.push("", "## 基準別スコア", "", "| 基準 | スコア | 備考 |", "|---|---|---|");
+    out.push("", "## 基準別スコア", "", "| 基準 | 採点 | スコア | 備考 |", "|---|---|---|---|");
     for (const c of summary.criteria) {
-      out.push(`| ${c.criterion} | ${formatScore(c.score)} | ${cell(c.note)} |`);
+      const mark = methodMark(c.method)?.text ?? "";
+      out.push(`| ${c.criterion} | ${mark} | ${formatScore(c.score)} | ${cell(c.note)} |`);
     }
   }
 
@@ -61,6 +73,7 @@ function pageSection(state: ReviewState, page: PageResult): string[] {
     `|${scores.map(() => "---").join("|")}|`,
     `| ${scores.map((s) => formatScore(s.score)).join(" | ")} |`,
     "",
+    ...(formatUsage(page.usage) ? [`LLM: ${formatUsage(page.usage)}`, ""] : []),
     "**良い点**",
     "",
     ...page.good_points.map((g) => `- ${g}`),

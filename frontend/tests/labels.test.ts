@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { formatScore, healthLabel, lintLabel, scoreTone, standardLabel, verdictLabel } from "../src/logic/labels";
+import {
+  formatScore,
+  formatUsage,
+  healthLabel,
+  lintLabel,
+  methodMark,
+  scoreTone,
+  standardLabel,
+  verdictLabel,
+} from "../src/logic/labels";
 import { DONE } from "./fixtures";
 
 const summary = (verdict: typeof DONE.summary.verdict) => ({ ...DONE.summary, verdict });
@@ -114,5 +123,33 @@ describe("standardLabel", () => {
   it("is null without a pack", () => {
     expect(standardLabel(null)).toBeNull();
     expect(standardLabel(undefined)).toBeNull();
+  });
+});
+
+describe("methodMark", () => {
+  it("marks LLM and Python scoring", () => {
+    expect(methodMark("llm")).toEqual({ text: "AI", title: "AI(LLM)がページ画像とテキストを見て採点" });
+    expect(methodMark("rule")).toEqual({ text: "計測", title: "Python で PDF から計測(毎回同じ結果)" });
+  });
+
+  it("is null when the backend did not say", () => {
+    expect(methodMark(undefined)).toBeNull();
+  });
+});
+
+describe("formatUsage", () => {
+  it("formats speed and token counts with separators", () => {
+    expect(formatUsage({ input_tokens: 1624, output_tokens: 1280, tokens_per_second: 80.4, pages: 2 })).toBe(
+      "80.4 tok/s・入力 1,624・出力 1,280 tokens",
+    );
+  });
+
+  it("leaves out parts that were not reported", () => {
+    expect(formatUsage({ input_tokens: null, output_tokens: 640, tokens_per_second: null })).toBe("出力 640 tokens");
+  });
+
+  it("is null without usage", () => {
+    expect(formatUsage(null)).toBeNull();
+    expect(formatUsage({ input_tokens: null, output_tokens: null, tokens_per_second: null })).toBeNull();
   });
 });

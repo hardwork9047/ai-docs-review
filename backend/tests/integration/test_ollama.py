@@ -36,7 +36,7 @@ def test_complete_streams_chat_and_joins_the_content_chunks() -> None:
 
     reply = asyncio.run(_client(handler).complete("sys", "usr", {"type": "object"}))
 
-    assert reply == '{"score": 1}'
+    assert reply.text == '{"score": 1}'
     assert str(seen[0].url) == "http://ollama.test/api/chat"
     body = json.loads(seen[0].content)
     assert body["model"] == "gemma4:e2b"
@@ -155,7 +155,7 @@ def _flaky(*statuses: int) -> tuple[Handler, list[httpx.Request]]:
 def test_cloudflare_timeout_is_retried_once() -> None:
     # Colab 起動直後の初回はモデル読み込みで Cloudflare の 100 秒制限(524)を超えることがある
     handler, seen = _flaky(524)
-    assert asyncio.run(_client(handler).complete("s", "u", {})) == "{}"
+    assert asyncio.run(_client(handler).complete("s", "u", {})).text == "{}"
     assert len(seen) == 2
 
 
@@ -241,7 +241,36 @@ def test_modal_timeout_redirect_is_followed_to_the_original_response() -> None:
 
     settings = Settings(ollama_url="http://ollama.test", ollama_headers={"Modal-Key": "k"})
     client = OllamaClient(settings, transport=httpx.MockTransport(handler))
-    assert asyncio.run(client.complete("s", "u", {})) == '{"ok": 1}'
+    assert asyncio.run(client.complete("s", "u", {})).text == '{"ok": 1}'
     follow = seen[1]
     assert (follow.method, follow.url.params["__modal_attempt_token"]) == ("GET", "abc")
     assert follow.headers["Modal-Key"] == "k"  # 認証ヘッダーを付けたまま追う
+
+
+def test_usage_is_read_from_the_final_chunk() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _ndjson(
+            {"message": {"content": "{}"}, "done": False},
+            {
+                "model": "gemma4:e2b",
+                "message": {"content": ""},
+                "done": True,
+                "prompt_eval_count": 812,
+                "eval_count": 640,
+                "eval_duration": 8_000_000_000,
+            },
+        )
+
+    usage = asyncio.run(_client(handler).complete("s", "u", {})).usage
+    assert usage is not None
+    assert (usage.model, usage.input_tokens, usage.output_tokens) == ("gemma4:e2b", 812, 640)
+    assert (usage.eval_seconds, usage.tokens_per_second) == (8.0, 80.0)
+
+
+def test_usage_fields_are_none_when_not_reported() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _ndjson({"message": {"content": "{}"}, "done": True})
+
+    usage = asyncio.run(_client(handler).complete("s", "u", {})).usage
+    assert usage is not None
+    assert (usage.input_tokens, usage.output_tokens, usage.tokens_per_second) == (None, None, None)

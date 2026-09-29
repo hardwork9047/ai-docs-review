@@ -31,8 +31,11 @@ describe("toMarkdown", () => {
 
   it("has a criteria table with dashes for not-applicable", () => {
     const md = render();
-    expect(md).toContain("| 基準 | スコア | 備考 |\n|---|---|---|\n| 内容 | 70 | 2ページ |");
-    expect(md).toContain("| グラフ | – |  |");
+    expect(md).toContain(
+      "| 基準 | 採点 | スコア | 備考 |\n|---|---|---|---|\n| 内容 | AI | 70 | 2ページ |",
+    );
+    expect(md).toContain("| フォントサイズ | 計測 | 80 | 2ページ |");
+    expect(md).toContain("| グラフ | AI | – |  |");
   });
 
   it("lists rule checks as a checklist", () => {
@@ -65,9 +68,9 @@ describe("toMarkdown", () => {
     const state = finished();
     const summary = {
       ...DONE.summary,
-      criteria: [{ criterion: "フォント" as const, score: 70, note: "A | B" }],
+      criteria: [{ criterion: "フォント" as const, score: 70, note: "A | B", method: "rule" as const }],
     };
-    expect(toMarkdown({ ...state, summary })).toContain("| フォント | 70 | A \\| B |");
+    expect(toMarkdown({ ...state, summary })).toContain("| フォント | 計測 | 70 | A \\| B |");
   });
 
   it("says so when there are no rule-check findings", () => {
@@ -110,5 +113,14 @@ describe("toMarkdown with company rules", () => {
     expect(md).toContain(
       "- [ ] 会社ルール・必須(P3): 効果を言い切らない(「必ず」) — 根拠: ガイドライン §4.2",
     );
+  });
+});
+
+
+describe("toMarkdown with LLM usage", () => {
+  it("reports total usage in the summary and per page", () => {
+    const md = toMarkdown(finished());
+    expect(md).toContain("- LLM の使用量: 80 tok/s・入力 1,624・出力 1,280 tokens(2ページ)");
+    expect(md).toContain("LLM: 80 tok/s・入力 812・出力 640 tokens");
   });
 });
