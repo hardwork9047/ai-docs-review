@@ -18,12 +18,50 @@ Criterion = Literal["内容", "フォントサイズ", "フォント", "図", "�
 CRITERIA: tuple[Criterion, ...] = ("内容", "フォントサイズ", "フォント", "図", "グラフ", "文字量")
 
 
+Method = Literal["llm", "rule"]
+# どの基準を誰が採点するか: LLM(ページ画像とテキストを見て判断)か、Python(PDF から計測)か
+CRITERION_METHOD: dict[Criterion, Method] = {
+    "内容": "llm",
+    "フォントサイズ": "rule",
+    "フォント": "rule",
+    "図": "llm",
+    "グラフ": "llm",
+    "文字量": "rule",
+}
+
+
 class CriterionScore(BaseModel):
-    """Score (0-100) for one criterion; None when the criterion does not apply."""
+    """Score (0-100) for one criterion; None when the criterion does not apply.
+
+    `method` says who scored it: "llm" (the vision LLM) or "rule" (measured in Python).
+    """
 
     criterion: Criterion
     score: int | None
     note: str = ""
+    method: Method = "rule"
+
+
+class LLMUsage(BaseModel):
+    """Token usage and speed of one LLM call (as reported by Ollama).
+
+    Fields are None when the backend did not report them (e.g. a cached prompt).
+    """
+
+    model: str = ""
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    eval_seconds: float | None = None
+    tokens_per_second: float | None = None
+
+
+class UsageTotal(BaseModel):
+    """Usage summed over reviewed pages; tokens/s = total output / total generation time."""
+
+    input_tokens: int
+    output_tokens: int
+    tokens_per_second: float | None
+    pages: int
 
 
 class PageAssessment(BaseModel):
@@ -54,12 +92,20 @@ class PageResult(BaseModel):
     bad_points: list[str]
     fixes: list[str]
     thumbnail: str
+    usage: LLMUsage | None = None
 
     @classmethod
     def build(
-        cls, page: Page, assessment: PageAssessment, measured: list[CriterionScore]
+        cls,
+        page: Page,
+        assessment: PageAssessment,
+        measured: list[CriterionScore],
+        usage: LLMUsage | None = None,
     ) -> "PageResult":
-        """Merge the LLM assessment with the measured criteria for `page`."""
+        """Merge the LLM assessment with the measured criteria for `page`.
+
+        Each criterion is tagged with its `method`; `usage` is the LLM call's usage.
+        """
         judged = {
             "内容": assessment.content_score,
             "図": assessment.figure_score,
@@ -105,6 +151,7 @@ class Summary(BaseModel):
     reviewed_pages: int
     failed_pages: int
     verdict: Verdict | None
+    usage: UsageTotal | None = None
 
 
 def summarize(
@@ -144,3 +191,8 @@ def _mean(values: Sequence[int | None]) -> int | None:
 def encode_thumbnail(image: bytes) -> str:
     """Base64 text for embedding the page JPEG in JSON."""
     return base64.b64encode(image).decode("ascii")
+
+
+def total_usage(results: Sequence[PageResult]) -> UsageTotal | None:
+    """Sum token usage over pages that reported it; None when none did."""
+    raise NotImplementedError

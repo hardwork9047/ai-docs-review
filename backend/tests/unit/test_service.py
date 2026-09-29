@@ -6,12 +6,13 @@ from collections.abc import Sequence
 from typing import Any
 
 from app.domain.pages import Page
-from app.domain.review import PageAssessment
+from app.domain.review import LLMUsage, PageAssessment
 from app.domain.reviewer import BOSS
 from app.domain.service import (
     DoneEvent,
     Event,
     LLMError,
+    LLMReply,
     MetaEvent,
     PageErrorEvent,
     PageEvent,
@@ -34,13 +35,13 @@ GOOD_REPLY = json.dumps(
 class FakeLLM:
     """Replies per call from `replies` (an Exception is raised); records every call."""
 
-    def __init__(self, *replies: str | Exception) -> None:
+    def __init__(self, *replies: str | LLMReply | Exception) -> None:
         self.replies = list(replies)
         self.calls: list[tuple[str, str, dict[str, Any], list[bytes]]] = []
 
     async def complete(
         self, system: str, user: str, schema: dict[str, Any], images: Sequence[bytes] = ()
-    ) -> str:
+    ) -> str | LLMReply:
         self.calls.append((system, user, schema, list(images)))
         reply = self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
         if isinstance(reply, Exception):
@@ -213,3 +214,20 @@ def test_llm_receives_the_pack_guidelines_in_the_system_prompt() -> None:
     system = llm.calls[0][0]
     assert system.startswith(BOSS.system_prompt)
     assert "単位と出典がある" in system
+
+
+def test_llm_usage_is_attached_to_pages_and_summed_in_done() -> None:
+    usage = LLMUsage(input_tokens=800, output_tokens=600, eval_seconds=7.5, tokens_per_second=80.0)
+    events = _run(_pages(2), FakeLLM(LLMReply(text=GOOD_REPLY, usage=usage)))
+    pages = [e for e in events if isinstance(e, PageEvent)]
+    assert pages[0].result.usage == usage
+    done = events[-1]
+    assert isinstance(done, DoneEvent)
+    assert done.summary.usage is not None
+    assert (done.summary.usage.input_tokens, done.summary.usage.output_tokens) == (1600, 1200)
+
+
+def test_plain_text_replies_have_no_usage() -> None:
+    page_event = _run(_pages(1), FakeLLM(GOOD_REPLY))[1]
+    assert isinstance(page_event, PageEvent)
+    assert page_event.result.usage is None

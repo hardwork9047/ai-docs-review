@@ -8,7 +8,7 @@ from typing import Any
 import httpx
 from pydantic import BaseModel
 
-from app.domain.service import LLMError
+from app.domain.service import LLMError, LLMReply
 from app.infra.settings import Settings
 
 # Cloudflare が「オリジンから 100 秒以内に応答が無い」ときに返すステータス
@@ -37,8 +37,8 @@ class OllamaClient:
 
     async def complete(
         self, system: str, user: str, schema: dict[str, Any], images: Sequence[bytes] = ()
-    ) -> str:
-        """Return the model's JSON reply text. Raise `LLMError` on any backend failure.
+    ) -> LLMReply:
+        """Return the model's JSON reply text and usage. Raise `LLMError` on backend failure.
 
         The reply is received with `stream: true` and joined, so slow generations keep
         the connection alive through proxies with idle timeouts (e.g. Cloudflare's 100 s).
