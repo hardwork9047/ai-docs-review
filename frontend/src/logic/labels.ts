@@ -1,6 +1,6 @@
 /** Display wording derived from backend data (kept out of ui/ so it is testable). */
 
-import type { LintFinding, Summary } from "./events";
+import type { LintFinding, LLMUsage, Summary, UsageTotal } from "./events";
 
 /** Shape of `GET /api/health` (mirror of backend `OllamaHealth`). */
 export interface Health {
@@ -74,4 +74,16 @@ export function standardLabel(
   standard: { name: string; version: string } | null | undefined,
 ): string | null {
   return standard ? `${standard.name} v${standard.version}` : null;
+}
+
+/** Small mark for who scored a criterion: "AI" (LLM) or "計測" (Python). Null if unknown. */
+export function methodMark(method: "llm" | "rule" | undefined): { text: string; title: string } | null {
+  void method;
+  throw new Error("not implemented");
+}
+
+/** "80 tok/s・入力 812・出力 640 tokens"; parts that were not reported are left out. */
+export function formatUsage(usage: LLMUsage | UsageTotal | null | undefined): string | null {
+  void usage;
+  throw new Error("not implemented");
 }

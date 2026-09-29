@@ -10,6 +10,25 @@ export interface CriterionScore {
   /** 0-100。その基準が当てはまらないページ(図が無い等)は null */
   score: number | null;
   note: string;
+  /** 採点したもの: "llm"(AI がページ画像とテキストで判断)/ "rule"(Python で計測) */
+  method?: "llm" | "rule";
+}
+
+/** LLM 呼び出し1回のトークン使用量と速度(Ollama の報告値。無ければ null) */
+export interface LLMUsage {
+  model?: string;
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  eval_seconds?: number | null;
+  tokens_per_second?: number | null;
+}
+
+/** 採点したページ全体の合計。tokens_per_second = 出力合計 ÷ 生成時間合計 */
+export interface UsageTotal {
+  input_tokens: number;
+  output_tokens: number;
+  tokens_per_second: number | null;
+  pages: number;
 }
 
 export interface PageResult {
@@ -23,6 +42,7 @@ export interface PageResult {
   fixes: string[];
   /** ページ画像(JPEG)の base64。空文字なら画像なし */
   thumbnail: string;
+  usage?: LLMUsage | null;
 }
 
 export interface Verdict {
@@ -38,6 +58,7 @@ export interface Summary {
   reviewed_pages: number;
   failed_pages: number;
   verdict: Verdict | null;
+  usage?: UsageTotal | null;
 }
 
 export interface LintFinding {
